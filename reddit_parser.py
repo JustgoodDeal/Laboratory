@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 import datetime
+import logging
 import os
 import requests
 import time
@@ -88,7 +89,7 @@ class PostDataParser:
         except IndexError:
             raise ParserError('Parser index error')
         self.post_url = date_and_url_tag.attrs["href"]
-        self.post_date = date_and_url_tag.text
+        self.post_date = self.convert_date(date_and_url_tag.text)
 
     def define_username_karmas_cakeday(self):
         try:
@@ -134,6 +135,17 @@ class PostDataParser:
     def make_post_dict(self):
         for attr_name in self.dict_order:
             self.post_dict[attr_name] = getattr(self, attr_name)
+
+    @staticmethod
+    def convert_date(date_str):
+        if 'just now' in date_str or 'hour' in date_str:
+            days = 0
+        elif 'month' in date_str:
+            days = 31
+        else:
+            days = int(date_str.split()[0])
+        date = datetime.datetime.today() - datetime.timedelta(days=days)
+        return date.strftime("%d.%m.%Y")
 
     @staticmethod
     def get_html(url):
@@ -188,6 +200,7 @@ class PostsProcessor:
             return pg.get_posts()
 
     def establish_post_data(self):
+        logging.basicConfig(filename="parserErrors.log", level=logging.INFO, format='%(asctime)s: %(message)s')
         parsed_post_data = []
         for post in self.all_posts:
             if len(parsed_post_data) == self.posts_count:
@@ -195,7 +208,7 @@ class PostsProcessor:
             try:
                 post_dict = PostDataParser(post).post_dict
             except ParserError as err:
-                print(err.text, err.post_url)
+                logging.info(f'{err.text}, post URL: {err.post_url}')
                 continue
             parsed_post_data.append(post_dict)
         return parsed_post_data
