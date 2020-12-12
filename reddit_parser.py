@@ -196,11 +196,13 @@ class PostsProcessor:
         FileWriter(self.parsed_post_data).write_to_file()
 
     def get_posts_list(self, url, posts_count):
+        logging.basicConfig(filename="parserErrors.log", level=logging.INFO,
+                            format='%(asctime)s. %(levelname)s: %(message)s')
+        logging.info('Start sending requests')
         with PostsGetter(url, posts_count) as pg:
             return pg.get_posts()
 
     def establish_post_data(self):
-        logging.basicConfig(filename="parserErrors.log", level=logging.INFO, format='%(asctime)s: %(message)s')
         parsed_post_data = []
         for post in self.all_posts:
             if len(parsed_post_data) == self.posts_count:
@@ -208,9 +210,10 @@ class PostsProcessor:
             try:
                 post_dict = PostDataParser(post).post_dict
             except ParserError as err:
-                logging.info(f'{err.text}, post URL: {err.post_url}')
+                logging.error(f'{err.text}, post URL: {err.post_url}')
                 continue
             parsed_post_data.append(post_dict)
+        logging.info('Stop sending requests')
         return parsed_post_data
 
 
