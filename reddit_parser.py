@@ -1,11 +1,13 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
+from utils import DataConverter
 import datetime
 import logging
 import os
 import requests
 import time
+import uuid
 
 
 class PageLoader:
@@ -87,10 +89,11 @@ class PostDataParser:
         self.post = str(post)
         self.post_soup = BeautifulSoup(self.post, features="html.parser")
         self.post_dict = {}
+        self.unique_id = uuid.uuid1().hex
         self.methods_order = ['define_url_date', 'define_username_karmas_cakeday', 'define_comments_count',
                               'define_votes_count', 'define_category']
-        self.dict_order = ['post_url', 'username', 'user_karma', 'user_cake_day', 'post_karma', 'comment_karma',
-                           'post_date', 'comments_count', 'votes_count', 'post_category']
+        self.dict_order = ['unique_id', 'post_url', 'username', 'user_karma', 'user_cake_day', 'post_karma',
+                           'comment_karma', 'post_date', 'comments_count', 'votes_count', 'post_category']
         self.extract_data()
         self.make_post_dict()
 
@@ -106,7 +109,7 @@ class PostDataParser:
         except IndexError:
             raise ParserError('Parser index error')
         self.post_url = date_and_url_tag.attrs["href"]
-        self.post_date = self.convert_date(date_and_url_tag.text)
+        self.post_date = DataConverter.convert_date(date_and_url_tag.text)
 
     def define_username_karmas_cakeday(self):
         """Try to find post creator at first. In case the user is deleted relevant exception is thrown.
@@ -164,21 +167,6 @@ class PostDataParser:
             self.post_dict[attr_name] = getattr(self, attr_name)
 
     @staticmethod
-    def convert_date(date_str):
-        """Take a string containing time lapse between publishing post and current time.
-
-        ('just now', '7 days ago', '1 month ago', etc.). Convert it to the date when the post was published.
-        """
-        if 'just now' in date_str or 'hour' in date_str:
-            days = 0
-        elif 'month' in date_str:
-            days = 31
-        else:
-            days = int(date_str.split()[0])
-        date = datetime.datetime.today() - datetime.timedelta(days=days)
-        return date.strftime("%d.%m.%Y")
-
-    @staticmethod
     def get_html(url):
         """Send a request to indicated URL and return server response text in HTML format.
 
@@ -201,19 +189,31 @@ class PostDataParser:
 class FileWriter:
     def __init__(self, post_data):
         """Take a list with collected data from all posts. Define the path to output file and path to it"""
-        self.file_name = self.define_file_name('txt')
-        self.file_path = self.define_file_path(self.file_name)
         self.post_data = post_data
+        self.new_file_name = self.define_file_name('txt')
+        self.path_to_new_file = os.path.join(os.getcwd(), self.new_file_name)
+        self.remove_old_file()
+        self.write_data_to_new_file()
 
-    def write_to_file(self):
-        with open(self.file_path, 'w') as file:
-            for post_dict in self.post_data:
-                post_data_str = ''
-                for data_name in post_dict:
-                    data_value = post_dict[data_name]
-                    post_data_str += f'{data_value}; '
-                post_data_str = post_data_str[:len(post_data_str) - 2]
-                file.write(post_data_str + '\n')
+    def write_data_to_new_file(self):
+        with open(self.path_to_new_file, 'w') as file:
+            for ind, post_dict in enumerate(self.post_data):
+                post_data_str = DataConverter.make_str_from_dict(post_dict)
+                if ind != len(self.post_data) - 1:
+                    post_data_str += '\n'
+                file.write(post_data_str)
+
+    def remove_old_file(self):
+        path_to_old_file = self.define_path_to_file()
+        if path_to_old_file:
+            os.remove(path_to_old_file)
+
+    @staticmethod
+    def define_path_to_file():
+        work_dir_path = os.getcwd()
+        for name in os.listdir(work_dir_path):
+            if os.path.isfile(name) and 'reddit-' in name:
+                return os.path.join(work_dir_path, name)
 
     @staticmethod
     def define_file_name(file_format):
@@ -222,11 +222,6 @@ class FileWriter:
         file_name = f'reddit-{datetime_str}.{file_format}'
         return file_name
 
-    @staticmethod
-    def define_file_path(file_name):
-        work_dir_path = os.getcwd()
-        return os.path.join(work_dir_path, file_name)
-
 
 class PostsProcessor:
     def __init__(self, url, posts_count):
@@ -234,7 +229,7 @@ class PostsProcessor:
         self.posts_count = posts_count
         self.all_posts = self.get_posts_list(self.url, self.posts_count)
         self.parsed_post_data = self.establish_post_data()
-        FileWriter(self.parsed_post_data).write_to_file()
+        FileWriter(self.parsed_post_data)
 
     def get_posts_list(self, url, posts_count):
         logging.basicConfig(filename="parserErrors.log", level=logging.INFO,
@@ -258,4 +253,5 @@ class PostsProcessor:
         return parsed_post_data
 
 
-PostsProcessor("https://www.reddit.com/top/?t=month", 100)
+if __name__ == "__main__":
+    PostsProcessor("https://www.reddit.com/top/?t=month", 100)
