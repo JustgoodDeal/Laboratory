@@ -14,14 +14,14 @@ class Server(BaseHTTPRequestHandler):
         url = self.path[1:]
         if url:
             response = {}
-            number = parse_url(url)
-            if not number:
+            id = parse_url(url)
+            if id == 404:
                 status_code = 404
-            elif type(number) == str:
-                response = get_posts()
+            elif id:
+                response = get_line(id)
                 status_code = response['status_code']
             else:
-                response = get_line(number)
+                response = get_posts()
                 status_code = response['status_code']
             content_type = "application/json"
             content = response.get('content', '')
@@ -51,9 +51,9 @@ class Server(BaseHTTPRequestHandler):
         content = ''
         status_code = 404
         if url:
-            number = parse_url(url)
-            if number and type(number) == int:
-                response = del_line(number)
+            id = parse_url(url)
+            if id and id != 404:
+                response = del_line(id)
                 status_code = response['status_code']
         self.respond_to_request(status_code, content_type, content)
 
@@ -63,22 +63,23 @@ class Server(BaseHTTPRequestHandler):
         content = ''
         status_code = 404
         if url:
-            number = parse_url(url)
-            if number and type(number) == int:
+            id = parse_url(url)
+            if id and id != 404:
                 content_length = int(self.headers['Content-Length'])
                 put_body = self.rfile.read(content_length)
-                response = change_line(number, put_body)
+                response = change_line(id, put_body)
                 status_code = response['status_code']
         self.respond_to_request(status_code, content_type, content)
 
 
-host_name = "localhost"
-host_port = 8087
+def run_server(host_name, host_port):
+    server = HTTPServer((host_name, host_port), Server)
+    print(f"Server Starts - {host_name}:{host_port}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        ...
 
-server = HTTPServer((host_name, host_port), Server)
-print(f"Server Starts - {host_name}:{host_port}")
 
-try:
-    server.serve_forever()
-except KeyboardInterrupt:
-    ...
+if __name__ == "__main__":
+    run_server("localhost", 8087)

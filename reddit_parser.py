@@ -188,7 +188,10 @@ class PostDataParser:
 
 class FileWriter:
     def __init__(self, post_data):
-        """Take a list with collected data from all posts. Define the path to output file and path to it"""
+        """Take a list with collected data from all posts. Define the path to output file,
+
+        write stringified post data to it after having removed previous one if existing.
+        """
         self.post_data = post_data
         self.new_file_name = self.define_file_name('txt')
         self.path_to_new_file = os.path.join(os.getcwd(), self.new_file_name)
@@ -196,6 +199,7 @@ class FileWriter:
         self.write_data_to_new_file()
 
     def write_data_to_new_file(self):
+        """Write post data stringified from dicts to the new file"""
         with open(self.path_to_new_file, 'w') as file:
             for ind, post_dict in enumerate(self.post_data):
                 post_data_str = DataConverter.make_str_from_dict(post_dict)
@@ -204,19 +208,22 @@ class FileWriter:
                 file.write(post_data_str)
 
     def remove_old_file(self):
-        path_to_old_file = self.define_path_to_file()
+        """Remove no longer needed post data file if existing"""
+        path_to_old_file = self.define_path_to_file('reddit-')
         if path_to_old_file:
             os.remove(path_to_old_file)
 
     @staticmethod
-    def define_path_to_file():
+    def define_path_to_file(prefix):
+        """Define path to the file existing in the directory under the prefix contained in the file name"""
         work_dir_path = os.getcwd()
         for name in os.listdir(work_dir_path):
-            if os.path.isfile(name) and 'reddit-' in name:
+            if os.path.isfile(name) and prefix in name:
                 return os.path.join(work_dir_path, name)
 
     @staticmethod
     def define_file_name(file_format):
+        """Define the name of output file based on the file format and current time"""
         datetime_now = datetime.datetime.now()
         datetime_str = datetime_now.strftime("%Y%m%d%H%M")
         file_name = f'reddit-{datetime_str}.{file_format}'
@@ -232,7 +239,7 @@ class PostsProcessor:
         FileWriter(self.parsed_post_data)
 
     def get_posts_list(self, url, posts_count):
-        logging.basicConfig(filename="parserErrors.log", level=logging.INFO,
+        logging.basicConfig(filename="parserLogs.log", level=logging.INFO,
                             format='%(asctime)s. %(levelname)s: %(message)s')
         logging.info('Start sending requests')
         with PostsGetter(url, posts_count) as pg:

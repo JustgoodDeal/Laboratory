@@ -37,21 +37,30 @@ class DataConverter:
 
 
 def check_duplicates(post_data_str, posts_list):
+    sent_id = post_data_str[:32]
     for post_str in posts_list:
-        if post_data_str == post_str.replace('\n', ''):
+        stored_id = post_str[:32]
+        if sent_id == stored_id:
             return
     return True
+
+
+def find_line_index(sent_id, posts_list):
+    for ind, post_str in enumerate(posts_list):
+        stored_id = post_str[:32]
+        if sent_id == stored_id:
+            return ind
+    return
 
 
 def parse_url(url):
     latest_slash = url[len(url) - 1]
     if latest_slash == '/' and url[:5] == 'posts':
-        number_start_index = 6
-        if len(url) > number_start_index:
-            number = url[number_start_index:len(url) - 1]
-            for char in number:
-                if not char.isdigit():
-                    return
-            return int(number)
-        return 'No line number'
-    return
+        id_start_index = 6
+        if len(url) > id_start_index:
+            id = url[id_start_index:len(url) - 1]
+            if len(id) == 32:
+                return id
+            return 404
+        return
+    return 404
