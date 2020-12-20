@@ -20,7 +20,7 @@ class PageLoader:
         self.page_posts_count = posts_count + posts_count // 2
 
     def __call__(self, driver):
-        """Scroll down the page unless loaded posts count is sufficient"""
+        """Scrolls down the page unless loaded posts count is sufficient"""
         self.scroll_down_page(driver)
         post_divs_loaded = driver.find_elements_by_css_selector(self.post_divs_selector)
         if len(post_divs_loaded) > self.page_posts_count:
@@ -30,13 +30,13 @@ class PageLoader:
 
     @staticmethod
     def scroll_down_page(driver):
-        """Scroll down the page"""
+        """Scrolls down the page"""
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
 
 class PostsGetter:
     def __init__(self, url, posts_count):
-        """Initialize Chrome webdriver, set posts load waiting limit"""
+        """Initializes Chrome webdriver, sets posts load waiting limit"""
         self.driver = webdriver.Chrome()
         self.posts_query = ['div', {'class': '_1oQyIsiPHYt6nx7VOmd1sz'}]
         self.url = url
@@ -44,17 +44,17 @@ class PostsGetter:
         self.wait_seconds = 30
 
     def __enter__(self):
-        """Open suggested site in browser"""
+        """Opens suggested site in browser"""
         self.driver.get(self.url)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Close browser, suppress any exception"""
+        """Closes browser, suppress any exception"""
         self.driver.quit()
         return True
 
     def get_posts(self):
-        """After waiting for the page to be loaded, find all the posts presented on the page"""
+        """After waiting for the page to be loaded, finds all the posts presented on the page"""
         all_posts = []
         try:
             WebDriverWait(self.driver, self.wait_seconds).until(PageLoader(self.posts_count))
@@ -67,14 +67,14 @@ class PostsGetter:
 
 class ParserError(Exception):
     def __init__(self, text, post_url=None):
-        """Take error text and post url which raised the exception"""
+        """Takes error text and post url which raised the exception"""
         self.text = text
         self.post_url = post_url
 
 
 class PostDataParser:
     def __init__(self, post):
-        """Define queries for searching specific data in HTML, extract post-related data from HTML and
+        """Defines queries for searching specific data in HTML, extracts post-related data from HTML and
 
         write this data to dictionary.
         """
@@ -98,12 +98,12 @@ class PostDataParser:
         self.make_post_dict()
 
     def extract_data(self):
-        """Call class methods according to a certain order"""
+        """Calls class methods according to a certain order"""
         for method_name in self.methods_order:
             getattr(self, method_name)()
 
     def define_url_date(self):
-        """Define post URL and post date, suppress IndexError that could be thrown if tag isn't found"""
+        """Defines post URL and post date, suppresses IndexError that could be thrown if tag isn't found"""
         try:
             date_and_url_tag = self.post_soup.findAll(self.date_and_url_query[0], self.date_and_url_query[1])[0]
         except IndexError:
@@ -112,9 +112,9 @@ class PostDataParser:
         self.post_date = DataConverter.convert_date(date_and_url_tag.text)
 
     def define_username_karmas_cakeday(self):
-        """Try to find post creator at first. In case the user is deleted relevant exception is thrown.
+        """Tries to find post creator at first. In case the user is deleted relevant exception is thrown.
 
-        If not, make a request to the old version of the site to define post and comment karma,
+        If not, makes a request to the old version of the site to defines post and comment karma,
         and the request to the new version of the site to define user karma and user cake day.
         If user's private page is inaccessible to minors, relevant exception is thrown.
         """
@@ -140,7 +140,7 @@ class PostDataParser:
         self.user_cake_day = karma_and_cake_tags[1].text
 
     def define_comments_count(self):
-        """Define number of comments. If initial query doesn't deliver a result, the second will be used for search."""
+        """Defines number of comments. If initial query doesn't deliver a result, the second will be used for search."""
         comments_count_tags = self.post_soup.findAll(self.comments_count_query1[0], self.comments_count_query1[1])
         if comments_count_tags:
             comments_count_tag = comments_count_tags[0]
@@ -152,25 +152,25 @@ class PostDataParser:
             self.comments_count = raw_text[:space_index]
 
     def define_votes_count(self):
-        """Define number of votes"""
+        """Defines number of votes"""
         votes_count_tag = self.post_soup.findAll(self.votes_count_query[0], self.votes_count_query[1])[1]
         self.votes_count = votes_count_tag.text
 
     def define_category(self):
-        """Define post category"""
+        """Defines post category"""
         category_tag = self.post_soup.findAll(self.category_query[0], self.category_query[1])[1]
         self.post_category = category_tag.text[2:]
 
     def make_post_dict(self):
-        """Write previously generated post-related data to dictionary according to a certain order"""
+        """Writes previously generated post-related data to dictionary according to a certain order"""
         for attr_name in self.dict_order:
             self.post_dict[attr_name] = getattr(self, attr_name)
 
     @staticmethod
     def get_html(url):
-        """Send a request to indicated URL and return server response text in HTML format.
+        """Sends a request to indicated URL and return server response text in HTML format.
 
-        In case ReadTimeout error suspend execution of a program for some seconds and send another request.
+        In case ReadTimeout error suspends execution of a program for some seconds and send another request.
         """
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:45.0) Gecko/20100101 Firefox/45.0'
@@ -188,9 +188,9 @@ class PostDataParser:
 
 class FileWriter:
     def __init__(self, post_data):
-        """Take a list with collected data from all posts. Define the path to output file,
+        """Takes a list with collected data from all posts. Defines the path to output file,
 
-        write stringified post data to it after having removed previous one if existing.
+        writes stringified post data to it after having removed previous one if existing.
         """
         self.post_data = post_data
         self.new_file_name = self.define_file_name('txt')
@@ -199,7 +199,7 @@ class FileWriter:
         self.write_data_to_new_file()
 
     def write_data_to_new_file(self):
-        """Write post data stringified from dicts to the new file"""
+        """Writes post data stringified from dictionary to the new file"""
         with open(self.path_to_new_file, 'w') as file:
             for ind, post_dict in enumerate(self.post_data):
                 post_data_str = DataConverter.make_str_from_dict(post_dict)
@@ -208,14 +208,14 @@ class FileWriter:
                 file.write(post_data_str)
 
     def remove_old_file(self):
-        """Remove no longer needed post data file if existing"""
+        """Removes no longer needed post data file if existing"""
         path_to_old_file = self.define_path_to_file('reddit-')
         if path_to_old_file:
             os.remove(path_to_old_file)
 
     @staticmethod
     def define_path_to_file(prefix):
-        """Define path to the file existing in the directory under the prefix contained in the file name"""
+        """Defines path to the file existing in the directory under the prefix contained in the file name"""
         work_dir_path = os.getcwd()
         for name in os.listdir(work_dir_path):
             if os.path.isfile(name) and prefix in name:
@@ -223,7 +223,7 @@ class FileWriter:
 
     @staticmethod
     def define_file_name(file_format):
-        """Define the name of output file based on the file format and current time"""
+        """Defines the name of output file based on the file format and current time"""
         datetime_now = datetime.datetime.now()
         datetime_str = datetime_now.strftime("%Y%m%d%H%M")
         file_name = f'reddit-{datetime_str}.{file_format}'
@@ -232,6 +232,12 @@ class FileWriter:
 
 class PostsProcessor:
     def __init__(self, url, posts_count):
+        """Takes URL from reddit.com and count of posts which have to be written to output file.
+
+        Forms a list of all posts in HTML format presented on the webpage.
+        Parses these data and make a list of each post data from them.
+        Writes stringified post data to the file.
+        """
         self.url = url
         self.posts_count = posts_count
         self.all_posts = self.get_posts_list(self.url, self.posts_count)
@@ -239,6 +245,12 @@ class PostsProcessor:
         FileWriter(self.parsed_post_data)
 
     def get_posts_list(self, url, posts_count):
+        """Tries to find posts on indicated URL in the amount by a factor
+
+        of 1.5 times exceeding required to be written to the file.
+        Does basic configuration for the logging system,
+        logs information about starting of sending requests.
+        """
         logging.basicConfig(filename="parserLogs.log", level=logging.INFO,
                             format='%(asctime)s. %(levelname)s: %(message)s')
         logging.info('Start sending requests')
@@ -246,6 +258,11 @@ class PostsProcessor:
             return pg.get_posts()
 
     def establish_post_data(self):
+        """Parses HTML format posts into dictionaries and adds them to list.
+
+        If the count of added posts is equal to needed, stop parsing.
+        Logs Parser errors and information about finishing of sending requests.
+        """
         parsed_post_data = []
         for post in self.all_posts:
             if len(parsed_post_data) == self.posts_count:

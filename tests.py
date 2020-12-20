@@ -10,45 +10,61 @@ class FileReplacer:
     reddit_test_file_name = "reddit-201901191955.txt"
 
     def replace_reddit_by_test_file(self):
+        """Replaces reddit-file by test-file. Copies existing reddit-file to temporary while maintaining
+
+        its original name, keeping it in the name of the temporary file.
+        Removes reddit-file and copies test-file to the file with specified name.
+        If initially reddit-file didn't exist the creation of temporary file is skipped.
+        """
         path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
         if path_to_reddit_file:
-            reddit_f_name_start_ind = path_to_reddit_file.find('reddit-')
-            reddit_file_name = path_to_reddit_file[reddit_f_name_start_ind:]
-            copy2(path_to_reddit_file, f'temp-{reddit_file_name}')
+            chars_count_to_skip = len('reddit-')
+            reddit_f_datetime_start_ind = path_to_reddit_file.rfind('reddit-') + chars_count_to_skip
+            reddit_f_datetime = path_to_reddit_file[reddit_f_datetime_start_ind:]
+            copy2(path_to_reddit_file, f'temp-{reddit_f_datetime}')
             os.remove(path_to_reddit_file)
         path_to_test_file = FileWriter.define_path_to_file('test-')
         copy2(path_to_test_file, self.reddit_test_file_name)
 
     def restore_pre_test_state(self):
+        """Restores pre-test state of the directory. If tested file with specified name exists, removes it.
+
+        If temporary file exists, defines original name of reddit-file, copies this file to the file
+        with found name and removes temporary file.
+        """
         if os.path.exists(self.reddit_test_file_name):
             os.remove(self.reddit_test_file_name)
-            path_to_temp_file = FileWriter.define_path_to_file('temp-')
-            if path_to_temp_file:
-                former_reddit_f_name_start_ind = path_to_temp_file.find('reddit-')
-                former_reddit_file_name = path_to_temp_file[former_reddit_f_name_start_ind:]
-                copy2(path_to_temp_file, former_reddit_file_name)
-                os.remove(path_to_temp_file)
+        path_to_temp_file = FileWriter.define_path_to_file('temp-')
+        if path_to_temp_file:
+            chars_count_to_skip = len('temp-')
+            former_reddit_f_datetime_start_ind = path_to_temp_file.rfind('temp-') + chars_count_to_skip
+            former_reddit_f_datetime = path_to_temp_file[former_reddit_f_datetime_start_ind:]
+            copy2(path_to_temp_file, f'reddit-{former_reddit_f_datetime}')
+            os.remove(path_to_temp_file)
 
 
 class DirReorganizerMixin:
     def setUp(self):
+        """Defines setUp behavior for unittests. Calls the function that replaces reddit-file by test-file"""
         FileReplacer().replace_reddit_by_test_file()
 
     def tearDown(self):
+        """Defines setUp behavior for unittests. Calls the function that restores pre-test state of the directory"""
         FileReplacer().restore_pre_test_state()
 
 
 class PostDataCollection:
+    """Contains post dictionaries that will be used in unittests"""
     existent_post_dict = {'UNIQUE_ID': '48dde13e404611eb9360036bb7a2b36b',
                           'post URL': 'https://www.reddit.com/r/blog/comments/k967mm/reddit_in_2020/',
                           'username': 'reddit_irl', 'user karma': '197,182', 'user cake day': 'April 30, 2020',
                           'post karma': '18,395', 'comment karma': '11,835', 'post date': '09.12.2020',
                           'number of comments': '8.9k', 'number of votes': '168k', 'post category': 'blog'}
     nonexistent_post_dict = {'UNIQUE_ID': '00dde13e404611eb9360036bb7a2b36b',
-                          'post URL': 'https://www.reddit.com/r/blog/comments/k967mm/reddit_in_2020/',
-                          'username': 'reddit_irl', 'user karma': '197,182', 'user cake day': 'April 30, 2020',
-                          'post karma': '18,395', 'comment karma': '11,835', 'post date': '09.12.2020',
-                          'number of comments': '8.9k', 'number of votes': '168k', 'post category': 'blog'}
+                             'post URL': 'https://www.reddit.com/r/blog/comments/k967mm/reddit_in_2020/',
+                             'username': 'reddit_irl', 'user karma': '197,182', 'user cake day': 'April 30, 2020',
+                             'post karma': '18,395', 'comment karma': '11,835', 'post date': '09.12.2020',
+                             'number of comments': '8.9k', 'number of votes': '168k', 'post category': 'blog'}
     incorrect_post_dict = {'UNIQUE_ID': '48dde13e404611eb9360036bb7a2b36b'}
 
 
@@ -58,6 +74,13 @@ class TestGET(DirReorganizerMixin, unittest.TestCase):
         req = requests.get("http://localhost:8087/posts/", timeout=5)
         expected_post_dict = PostDataCollection.existent_post_dict
         self.assertEqual((req.status_code, req.json()[1]), (200, expected_post_dict))
+
+    def test_get_posts_no_file(self):
+        print('testing get_posts with no file detected')
+        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        os.remove(path_to_reddit_file)
+        req = requests.get("http://localhost:8087/posts/", timeout=5)
+        self.assertEqual((req.status_code, req.content), (404, b''))
 
     def test_get_posts_empty_file(self):
         print('testing get_posts with empty file')
@@ -72,6 +95,13 @@ class TestGET(DirReorganizerMixin, unittest.TestCase):
         req = requests.get("http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/", timeout=5)
         expected_post_dict = PostDataCollection.existent_post_dict
         self.assertEqual((req.status_code, req.json()), (200, expected_post_dict))
+
+    def test_get_line_no_file(self):
+        print('testing get_line with no file detected')
+        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        os.remove(path_to_reddit_file)
+        req = requests.get("http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/", timeout=5)
+        self.assertEqual((req.status_code, req.content), (404, b''))
 
     def test_get_line_empty_file(self):
         print('testing get_posts with empty file')
@@ -138,6 +168,13 @@ class TestDELETE(DirReorganizerMixin, unittest.TestCase):
         req = requests.delete("http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/", timeout=5)
         self.assertEqual(req.status_code, 200)
 
+    def test_del_line_no_file(self):
+        print('testing del_line with no file detected')
+        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        os.remove(path_to_reddit_file)
+        req = requests.delete("http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/", timeout=5)
+        self.assertEqual(req.status_code, 404)
+
     def test_del_line_empty_file(self):
         print('testing del_line with empty file')
         path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
@@ -165,6 +202,16 @@ class TestPUT(DirReorganizerMixin, unittest.TestCase):
         url = "http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/"
         req = requests.put(url, data=post_data_json, timeout=5)
         self.assertEqual(req.status_code, 200)
+
+    def test_change_line_no_file(self):
+        print('testing change_line with no file detected')
+        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        os.remove(path_to_reddit_file)
+        post_data = PostDataCollection.nonexistent_post_dict
+        post_data_json = json.dumps(post_data)
+        url = "http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/"
+        req = requests.put(url, data=post_data_json, timeout=5)
+        self.assertEqual(req.status_code, 404)
 
     def test_change_line_empty_file(self):
         print('testing change_line with empty file')
@@ -211,17 +258,22 @@ class TestPUT(DirReorganizerMixin, unittest.TestCase):
 
 
 def test_outcome_file(filename):
-    file_path = os.path.join(os.getcwd(), filename)
-    with open(file_path) as file:
-        data = file.readline()
-        lines_count = 0
-        while data:
-            data = data.split(';')
-            if not len(data) == 11:
-                return
+    """Defines whether reddit-file is correct. If each line of this file contains exactly 11 values
+
+    and the number of lines is equal to 100, returns True. If the file is incorrect, returns False.
+    """
+    if os.path.exists(filename):
+        with open(filename) as file:
             data = file.readline()
-            lines_count += 1
-        return lines_count == 100
+            lines_count = 0
+            while data:
+                data = data.split(';')
+                if not len(data) == 11:
+                    return
+                data = file.readline()
+                lines_count += 1
+            return lines_count == 100
+    return "File with the specified name doesn't exist"
 
 
 if __name__ == "__main__":

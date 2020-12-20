@@ -5,12 +5,22 @@ from utils import parse_url
 
 class Server(BaseHTTPRequestHandler):
     def respond_to_request(self, status_code, content_type, content):
+        """Sends response comprising specified status code and content to a request"""
         self.send_response(status_code)
         self.send_header("Content-type", content_type)
         self.end_headers()
         self.wfile.write(bytes(content, "utf-8"))
 
     def do_GET(self):
+        """Calls corresponding function for handling a GET request depending on the result of URL parsing
+
+        and determines the necessary data for respond to a request.
+        If URL is equal to "http://localhost:8087/posts/" - data will be received from function get_posts,
+        if matches "http://localhost:8087/posts/<UNIQUE_ID>/" - from get_line.
+        If URL is equal to "http://localhost:8087/", data needed for displaying the main page will be used.
+        If URL is incorrect, status code 404 will be used in response.
+        Sends response comprising defined data to the request.
+        """
         url = self.path[1:]
         if url:
             response = {}
@@ -32,6 +42,12 @@ class Server(BaseHTTPRequestHandler):
         self.respond_to_request(status_code, content_type, content)
 
     def do_POST(self):
+        """Determines the necessary data for respond to a POST request.
+
+        If URL is equal to "http://localhost:8087/posts/", receives these data from function add_line.
+        If URL is incorrect, status code 404 will be used in response.
+        Sends response comprising defined data to the request.
+        """
         url = self.path
         content_type = "application/json"
         if url == "/posts/":
@@ -46,6 +62,12 @@ class Server(BaseHTTPRequestHandler):
         self.respond_to_request(status_code, content_type, content)
 
     def do_DELETE(self):
+        """Determines the necessary data for respond to a DELETE request. Parses URL and if it's equal to
+
+        "http://localhost:8087/posts/<UNIQUE_ID>/", receives these data from function del_line.
+        If URL is incorrect, status code 404 will be used in response.
+        Sends response comprising defined data to the request.
+        """
         url = self.path[1:]
         content_type = "application/json"
         content = ''
@@ -58,6 +80,12 @@ class Server(BaseHTTPRequestHandler):
         self.respond_to_request(status_code, content_type, content)
 
     def do_PUT(self):
+        """Determines the necessary data for respond to a PUT request. Parses URL and if it's equal to
+
+        "http://localhost:8087/posts/<UNIQUE_ID>/", receives these data from function change_line.
+        If URL is incorrect, status code 404 will be used in response.
+        Sends response comprising defined data to the request.
+        """
         url = self.path[1:]
         content_type = "application/json"
         content = ''
@@ -73,6 +101,7 @@ class Server(BaseHTTPRequestHandler):
 
 
 def run_server(host_name, host_port):
+    """Runs the server at a time until shutdown. Pressing buttons on the keyboard will not stop the server"""
     server = HTTPServer((host_name, host_port), Server)
     print(f"Server Starts - {host_name}:{host_port}")
     try:

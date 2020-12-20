@@ -4,6 +4,7 @@ import datetime
 class DataConverter:
     @staticmethod
     def make_str_from_dict(post_dict):
+        """Converts dictionary with post data to string"""
         post_data_str = ''
         for data_name in post_dict:
             data_value = post_dict[data_name]
@@ -12,6 +13,7 @@ class DataConverter:
 
     @staticmethod
     def make_dict_from_str(data_str):
+        """Converts string with post data to dictionary in a specific sequence"""
         dict_order = ['UNIQUE_ID', 'post URL', 'username', 'user karma', 'user cake day', 'post karma', 'comment karma',
                       'post date', 'number of comments', 'number of votes', 'post category']
         post_data = data_str.replace('\n', '').split(';')
@@ -22,9 +24,9 @@ class DataConverter:
 
     @staticmethod
     def convert_date(date_str):
-        """Take a string containing time lapse between publishing post and current time.
+        """Takes a string containing time lapse between publishing post and current time.
 
-        ('just now', '7 days ago', '1 month ago', etc.). Convert it to the date when the post was published.
+        ('just now', '7 days ago', '1 month ago', etc.). Converts it to the date when the post was published.
         """
         if 'just now' in date_str or 'hour' in date_str:
             days = 0
@@ -37,6 +39,10 @@ class DataConverter:
 
 
 def check_duplicates(post_data_str, posts_list):
+    """Takes post data string and defines part of it being post unique id. If any of the strings from taken list
+
+    contains the same unique id, returns None (duplicate found); otherwise, returns True (no duplicates).
+    """
     sent_id = post_data_str[:32]
     for post_str in posts_list:
         stored_id = post_str[:32]
@@ -46,6 +52,10 @@ def check_duplicates(post_data_str, posts_list):
 
 
 def find_line_index(sent_id, posts_list):
+    """Takes post unique id. If is detected that one of the strings from taken
+
+    list contains the same unique id, returns line index of this string.
+    """
     for ind, post_str in enumerate(posts_list):
         stored_id = post_str[:32]
         if sent_id == stored_id:
@@ -54,6 +64,10 @@ def find_line_index(sent_id, posts_list):
 
 
 def parse_url(url):
+    """Parses provided URL. Define whether the URL contains 32-digits UNIQUE_ID. If true, returns this id.
+
+    If the URL contains only the word "posts", returns None. If URL is incorrect, returns 404
+    """
     latest_slash = url[len(url) - 1]
     if latest_slash == '/' and url[:5] == 'posts':
         id_start_index = 6

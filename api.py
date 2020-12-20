@@ -4,7 +4,11 @@ import json
 
 
 def get_posts():
-    """GET http://localhost:8087/posts/"""
+    """Tries to convert each string from reddit-file to dictionary and add this dictionary to list.
+
+    Returns generated list in JSON format and status code 200 if reddit-file exists and isn't empty.
+    In all other cases, status code 404 is only returned.
+    """
     file_path = FileWriter.define_path_to_file('reddit-')
     posts = []
     status_code = 404
@@ -22,7 +26,12 @@ def get_posts():
 
 
 def get_line(id):
-    """GET http://localhost:8087/posts/bcfe98ba3eb111eba3a5896f760fd13c/"""
+    """Tries to find a string with specified UNIQUE_ID in reddit-file.
+
+    If reddit-file exists and the search was successful, converts found string to dictionary
+    and returns this dictionary in JSON format with status code 200.
+    In all other cases, status code 404 is only returned.
+    """
     file_path = FileWriter.define_path_to_file('reddit-')
     post_dict = {}
     status_code = 404
@@ -40,7 +49,12 @@ def get_line(id):
 
 
 def add_line(post_dict):
-    """POST http://localhost:8087/posts/"""
+    """Takes post data in JSON format, converts it to string and tries to add to reddit-file.
+
+    If file doesn't exist the new one is generated. Returns JSON in the format {"UNIQUE_ID": inserted line number}
+    and status code 201 if successful. If equal post data already exists in reddit-file, only returns status code 409.
+    In all other cases, including incorrect post data, status code 404 is only returned.
+    """
     file_path = FileWriter.define_path_to_file('reddit-')
     posts_list = []
     status_code = 404
@@ -67,7 +81,11 @@ def add_line(post_dict):
 
 
 def del_line(id):
-    """DELETE http://localhost:8087/posts/bcfe98ba3eb111eba3a5896f760fd13c/"""
+    """Tries to find a string with specified UNIQUE_ID in reddit-file. If reddit-file exists
+
+    and the search was successful, deletes found string from the file and returns status code 200.
+    In all other cases, status code 404 is returned.
+    """
     file_path = FileWriter.define_path_to_file('reddit-')
     status_code = 404
     if file_path:
@@ -83,7 +101,12 @@ def del_line(id):
 
 
 def change_line(id, post_dict):
-    """PUT http://localhost:8087/posts/bcfe98ba3eb111eba3a5896f760fd13c/"""
+    """Takes post data in JSON format, converts it to string and tries to modify the content
+
+    of a line with specified UNIQUE_ID in reddit-file. Returns status code 200 if successful.
+    If equal post data already exists in the file, returns status code 409.
+    In all other cases, status code 404 is returned.
+    """
     file_path = FileWriter.define_path_to_file('reddit-')
     status_code = 404
     if file_path:
