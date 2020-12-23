@@ -3,27 +3,25 @@ import datetime
 
 class DataConverter:
     @staticmethod
-    def make_str_from_dict(post_dict):
-        """Converts dictionary with post data to string"""
-        post_data_str = ''
-        for data_name in post_dict:
-            data_value = post_dict[data_name]
-            post_data_str += f'{data_value};'
-        return post_data_str[:len(post_data_str) - 1]
-
-    @staticmethod
-    def make_dict_from_str(data_str):
-        """Converts string with post data to dictionary in a specific sequence"""
-        dict_order = ['UNIQUE_ID', 'post URL', 'username', 'user karma', 'user cake day', 'post karma', 'comment karma',
-                      'post date', 'number of comments', 'number of votes', 'post category']
-        post_data = data_str.replace('\n', '').split(';')
+    def make_dict_from_tuple(tup):
+        dict_order_map = {
+            'unique_id': '', 'post_url': '', 'username': '', 'user_karma': '', 'user_cake_day': 'datetime',
+            'post_karma': '', 'comment_karma': '', 'post_date': 'datetime', 'comments_number': '',
+            'votes_number': '', 'post_category': ''
+        }
         post_dict = {}
-        for ind in range(len(dict_order)):
-            post_dict[dict_order[ind]] = post_data[ind]
+        ind = 0
+        for name in dict_order_map:
+            value = tup[ind]
+            value_type = dict_order_map[name]
+            if value_type == 'datetime':
+                value = value.strftime("%d.%m.%Y")
+            post_dict[name] = value
+            ind += 1
         return post_dict
 
     @staticmethod
-    def convert_date(date_str):
+    def convert_time_lapse_to_date(date_str):
         """Takes a string containing time lapse between publishing post and current time.
 
         ('just now', '7 days ago', '1 month ago', etc.). Converts it to the date when the post was published.
@@ -35,32 +33,19 @@ class DataConverter:
         else:
             days = int(date_str.split()[0])
         date = datetime.datetime.today() - datetime.timedelta(days=days)
-        return date.strftime("%d.%m.%Y")
+        return date.strftime("%m.%d.%Y")
 
-
-def check_duplicates(post_data_str, posts_list):
-    """Takes post data string and defines part of it being post unique id. If any of the strings from taken list
-
-    contains the same unique id, returns None (duplicate found); otherwise, returns True (no duplicates).
-    """
-    sent_id = post_data_str[:32]
-    for post_str in posts_list:
-        stored_id = post_str[:32]
-        if sent_id == stored_id:
-            return
-    return True
-
-
-def find_line_index(sent_id, posts_list):
-    """Takes post unique id. If is detected that one of the strings from taken
-
-    list contains the same unique id, returns line index of this string.
-    """
-    for ind, post_str in enumerate(posts_list):
-        stored_id = post_str[:32]
-        if sent_id == stored_id:
-            return ind
-    return
+    @staticmethod
+    def convert_date(post_dict, format):
+        format = "%m.%d.%Y" if format == 'month' else "%d.%m.%Y"
+        for name in post_dict:
+            if name in {'user_cake_day', 'post_date'}:
+                try:
+                    inverted_date = datetime.datetime.strptime(post_dict.get(name), '%d.%m.%Y').strftime(format)
+                    post_dict[name] = inverted_date
+                except ValueError:
+                    ...
+        return post_dict
 
 
 def parse_url(url):
