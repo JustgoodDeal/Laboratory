@@ -3,27 +3,7 @@ import datetime
 
 class DataConverter:
     @staticmethod
-    def make_str_from_dict(post_dict):
-        """Converts dictionary with post data to string"""
-        post_data_str = ''
-        for data_name in post_dict:
-            data_value = post_dict[data_name]
-            post_data_str += f'{data_value};'
-        return post_data_str[:len(post_data_str) - 1]
-
-    @staticmethod
-    def make_dict_from_str(data_str):
-        """Converts string with post data to dictionary in a specific sequence"""
-        dict_order = ['UNIQUE_ID', 'post URL', 'username', 'user karma', 'user cake day', 'post karma', 'comment karma',
-                      'post date', 'number of comments', 'number of votes', 'post category']
-        post_data = data_str.replace('\n', '').split(';')
-        post_dict = {}
-        for ind in range(len(dict_order)):
-            post_dict[dict_order[ind]] = post_data[ind]
-        return post_dict
-
-    @staticmethod
-    def convert_date(date_str):
+    def convert_time_lapse_to_date(date_str):
         """Takes a string containing time lapse between publishing post and current time.
 
         ('just now', '7 days ago', '1 month ago', etc.). Converts it to the date when the post was published.
@@ -37,30 +17,24 @@ class DataConverter:
         date = datetime.datetime.today() - datetime.timedelta(days=days)
         return date.strftime("%d.%m.%Y")
 
+    @staticmethod
+    def convert_date_from_words_to_numbers(date_str):
+        try:
+            date_str = datetime.datetime.strptime(date_str, '%B %d, %Y').strftime('%d.%m.%Y')
+        except ValueError:
+            ...
+        return date_str
 
-def check_duplicates(post_data_str, posts_list):
-    """Takes post data string and defines part of it being post unique id. If any of the strings from taken list
-
-    contains the same unique id, returns None (duplicate found); otherwise, returns True (no duplicates).
-    """
-    sent_id = post_data_str[:32]
-    for post_str in posts_list:
-        stored_id = post_str[:32]
-        if sent_id == stored_id:
-            return
-    return True
-
-
-def find_line_index(sent_id, posts_list):
-    """Takes post unique id. If is detected that one of the strings from taken
-
-    list contains the same unique id, returns line index of this string.
-    """
-    for ind, post_str in enumerate(posts_list):
-        stored_id = post_str[:32]
-        if sent_id == stored_id:
-            return ind
-    return
+    @staticmethod
+    def convert_documents_into_post_dict(documents):
+        post_dict = {}
+        entity_order = ['post', 'user']
+        for ind in range(2):
+            entity_dict = documents[ind]
+            del entity_dict['_id']
+            entity_name = entity_order[ind]
+            post_dict[entity_name] = entity_dict
+        return post_dict
 
 
 def parse_url(url):
