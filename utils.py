@@ -4,6 +4,9 @@ import datetime
 class DataConverter:
     @staticmethod
     def make_dict_from_tuple(tup):
+        """Converts post data obtained from a database to dictionary in a specific sequence
+
+        If data is a datetime object, converts it to a string"""
         dict_order_map = {
             'unique_id': '', 'post_url': '', 'username': '', 'user_karma': '', 'user_cake_day': 'datetime',
             'post_karma': '', 'comment_karma': '', 'post_date': 'datetime', 'comments_number': '',
@@ -37,6 +40,11 @@ class DataConverter:
 
     @staticmethod
     def convert_date(post_dict, format):
+        """Converts string representation of specific dates from post dict to indicated format.
+
+        If month is given as a format, day and month switch places; otherwise,
+        if day and month are one-digit numbers, zero is placed before them.
+        """
         format = "%m.%d.%Y" if format == 'month' else "%d.%m.%Y"
         for name in post_dict:
             if name in {'user_cake_day', 'post_date'}:

@@ -65,6 +65,7 @@ class PostsGetter:
 
 
 class ParserError(Exception):
+    """Takes a name of the class thrown this exception, error text and post url causing it"""
     def __init__(self, thrown_by, text, post_url=None):
         self.thrown_by = thrown_by
         self.text = text
@@ -111,6 +112,12 @@ class PostDataParser:
         self.post_date = DataConverter.convert_time_lapse_to_date(date_and_url_tag.text)
 
     def define_username_karmas_cakeday(self):
+        """Tries to find post creator at first. In case the user is deleted relevant exception is thrown.
+
+        If not, makes a request to the old version of the site to defines post and comment karma,
+        and the request to the new version of the site to define user karma and user cake day.
+        If user's private page is inaccessible to minors, relevant exception is thrown.
+        """
         try:
             user_tag = self.post_soup.findAll(self.username_query[0], self.username_query[1])[0]
         except IndexError:
@@ -133,6 +140,10 @@ class PostDataParser:
         self.user_cake_day = karma_and_cake_tags[1].text
 
     def define_comments_number(self):
+        """Defines number of comments. If initial query doesn't deliver a result, the second will be used for search.
+
+        If value obtained contains the letter "k" instead of zeros, it's replaced by necessary quantity of zeros.
+        """
         comments_number_tags = self.post_soup.findAll(self.comments_number_query1[0], self.comments_number_query1[1])
         if comments_number_tags:
             comments_number_tag = comments_number_tags[0]
@@ -147,6 +158,10 @@ class PostDataParser:
         self.comments_number = int(self.comments_number.replace('.', '').replace('k', k_replacer))
 
     def define_votes_number(self):
+        """Defines number of votes. If value obtained contains the letter "k" instead of zeros,
+
+        it's replaced by necessary quantity of zeros.
+        """
         votes_number_tag = self.post_soup.findAll(self.votes_number_query[0], self.votes_number_query[1])[1]
         self.votes_number = votes_number_tag.text
         k_replacer = '00' if '.' in self.votes_number else '000'
@@ -184,6 +199,12 @@ class PostDataParser:
 
 class PostsProcessor:
     def __init__(self, url, posts_count):
+        """Takes URL from reddit.com and count of posts which should be saved to PostgreSQL database.
+
+        Forms a list of all posts in HTML format presented on the webpage.
+        Parses these data and make a list of each post data from them.
+        Stores parsed post data in the database.
+        """
         self.url = url
         self.posts_count = posts_count
         self.all_posts = self.get_posts_list()
@@ -223,6 +244,7 @@ class PostsProcessor:
         return parsed_post_data
 
     def save_all_posts_to_db(self):
+        """Creates tables in PostgreSQL database if they don't exist. Saves parsed post data to the tables"""
         with PostgreTablesCreator() as tables_creator:
             tables_creator.create_tables()
         with PostgreAllPostsInserter(self.parsed_post_data) as post_inserter:

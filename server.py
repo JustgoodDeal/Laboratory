@@ -1,4 +1,4 @@
-from api import add_line, change_line, del_line, get_line, get_posts
+from api import add_post, update_post, del_post, get_post, get_posts
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from utils import parse_url
 
@@ -16,7 +16,7 @@ class Server(BaseHTTPRequestHandler):
 
         and determines the necessary data for respond to a request.
         If URL is equal to "http://localhost:8087/posts/" - data will be received from function get_posts,
-        if matches "http://localhost:8087/posts/<UNIQUE_ID>/" - from get_line.
+        if matches "http://localhost:8087/posts/<UNIQUE_ID>/" - from get_post.
         If URL is equal to "http://localhost:8087/", data needed for displaying the main page will be used.
         If URL is incorrect, status code 404 will be used in response.
         Sends response comprising defined data to the request.
@@ -28,7 +28,7 @@ class Server(BaseHTTPRequestHandler):
             if id == 404:
                 status_code = 404
             elif id:
-                response = get_line(id)
+                response = get_post(id)
                 status_code = response['status_code']
             else:
                 response = get_posts()
@@ -44,7 +44,7 @@ class Server(BaseHTTPRequestHandler):
     def do_POST(self):
         """Determines the necessary data for respond to a POST request.
 
-        If URL is equal to "http://localhost:8087/posts/", receives these data from function add_line.
+        If URL is equal to "http://localhost:8087/posts/", receives these data from function add_post.
         If URL is incorrect, status code 404 will be used in response.
         Sends response comprising defined data to the request.
         """
@@ -53,7 +53,7 @@ class Server(BaseHTTPRequestHandler):
         if url == "/posts/":
             content_length = int(self.headers['Content-Length'])
             post_body = self.rfile.read(content_length)
-            response = add_line(post_body)
+            response = add_post(post_body)
             content = response.get('content', '')
             status_code = response['status_code']
         else:
@@ -64,7 +64,7 @@ class Server(BaseHTTPRequestHandler):
     def do_DELETE(self):
         """Determines the necessary data for respond to a DELETE request. Parses URL and if it's equal to
 
-        "http://localhost:8087/posts/<UNIQUE_ID>/", receives these data from function del_line.
+        "http://localhost:8087/posts/<UNIQUE_ID>/", receives these data from function del_post.
         If URL is incorrect, status code 404 will be used in response.
         Sends response comprising defined data to the request.
         """
@@ -75,14 +75,14 @@ class Server(BaseHTTPRequestHandler):
         if url:
             id = parse_url(url)
             if id and id != 404:
-                response = del_line(id)
+                response = del_post(id)
                 status_code = response['status_code']
         self.respond_to_request(status_code, content_type, content)
 
     def do_PUT(self):
         """Determines the necessary data for respond to a PUT request. Parses URL and if it's equal to
 
-        "http://localhost:8087/posts/<UNIQUE_ID>/", receives these data from function change_line.
+        "http://localhost:8087/posts/<UNIQUE_ID>/", receives these data from function update_post.
         If URL is incorrect, status code 404 will be used in response.
         Sends response comprising defined data to the request.
         """
@@ -95,7 +95,7 @@ class Server(BaseHTTPRequestHandler):
             if id and id != 404:
                 content_length = int(self.headers['Content-Length'])
                 put_body = self.rfile.read(content_length)
-                response = change_line(id, put_body)
+                response = update_post(id, put_body)
                 status_code = response['status_code']
         self.respond_to_request(status_code, content_type, content)
 
