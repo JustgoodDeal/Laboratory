@@ -39,7 +39,7 @@ def add_post(post_dict):
     stored_posts_number = 0
     status_code = 404
     if len(post_dict) == 2 and post_unique_id and len(post_unique_id) == 32 and post_unique_id == user_unique_id:
-        mongo_executor = MongoExecutor(post_dict=post_dict, unique_id=post_unique_id)
+        mongo_executor = MongoExecutor(unique_id=post_unique_id)
         stored_posts_number = mongo_executor.define_stored_posts_number()
         if not stored_posts_number:
             PostsProcessor("https://www.reddit.com/top/?t=month", 100)
@@ -47,7 +47,7 @@ def add_post(post_dict):
         if mongo_executor.get_post_data_from_db():
             status_code = 409
         elif stored_posts_number < 1000:
-            mongo_executor.insert_post_into_db()
+            mongo_executor.insert_post_into_db(post_dict)
             status_code = 201
     if not status_code == 201:
         return {'status_code': status_code}
@@ -81,12 +81,12 @@ def update_post(unique_id, post_dict):
     post_dict.get('user', {})['post_unique_id'] = unique_id
     status_code = 404
     if len(post_dict) == 2 and unique_id and len(unique_id) == 32:
-        mongo_executor = MongoExecutor(post_dict=post_dict, unique_id=unique_id)
+        mongo_executor = MongoExecutor(unique_id=unique_id)
         stored_post_dict = mongo_executor.get_post_from_db()
         if stored_post_dict:
             if stored_post_dict == post_dict:
                 status_code = 409
             else:
-                mongo_executor.update_post()
+                mongo_executor.update_post(post_dict)
                 status_code = 200
     return {'status_code': status_code}

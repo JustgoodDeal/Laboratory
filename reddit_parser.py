@@ -215,7 +215,7 @@ class PostsProcessor:
         self.posts_count = posts_count
         self.all_posts = self.get_posts_list()
         self.parsed_posts_data = self.establish_posts_data()
-        MongoExecutor(posts_list=self.parsed_posts_data).insert_all_posts_into_db()
+        MongoExecutor().insert_all_posts_into_db(self.parsed_posts_data)
 
     def get_posts_list(self):
         """Tries to find posts on the webpage in the amount by a factor
