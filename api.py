@@ -132,7 +132,7 @@ def insert_post(unique_id, post_dict):
     on condition that current number of database records does not exceed 1000.
     In the present case, status code 201 and the number of stored posts are returned.
     """
-    status_code, stored_post_number = 404, None
+    status_code, stored_post_number = 404, 0
     with PostgrePostInserter(unique_id, post_dict) as post_inserter:
         try:
             stored_post = post_inserter.get_post_from_db()

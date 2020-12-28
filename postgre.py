@@ -1,4 +1,5 @@
 import logging
+import os
 import psycopg2
 
 
@@ -43,18 +44,7 @@ class PostgreQueryCollection:
                                 on delete cascade
                     );                
                         '''
-    insert_post_query = """
-                with ins_user as (
-                    insert into users (
-                        username, user_karma, user_cake_day, post_karma, comment_karma
-                    ) values (%(username)s, %(user_karma)s, %(user_cake_day)s, %(post_karma)s, %(comment_karma)s)
-                    returning id
-                )
-                insert into posts (
-                    unique_id, post_url, post_date, comments_number, votes_number, post_category, user_id
-                ) values (%(unique_id)s, %(post_url)s, %(post_date)s, %(comments_number)s, %(votes_number)s, 
-                        %(post_category)s, (select id from ins_user))
-                    """
+    get_all_posts_no_users_query = '''select * from posts'''
     get_all_posts_query = '''                
                     select unique_id, post_url, username, user_karma, user_cake_day, post_karma, comment_karma, 
                     post_date, comments_number, votes_number, post_category
@@ -68,7 +58,18 @@ class PostgreQueryCollection:
                 join posts on users.id = posts.user_id
                 where unique_id = %s 
                     '''
-    get_all_posts_no_users_query = '''select * from posts'''
+    insert_post_query = """
+                with ins_user as (
+                    insert into users (
+                        username, user_karma, user_cake_day, post_karma, comment_karma
+                    ) values (%(username)s, %(user_karma)s, %(user_cake_day)s, %(post_karma)s, %(comment_karma)s)
+                    returning id
+                )
+                insert into posts (
+                    unique_id, post_url, post_date, comments_number, votes_number, post_category, user_id
+                ) values (%(unique_id)s, %(post_url)s, %(post_date)s, %(comments_number)s, %(votes_number)s, 
+                        %(post_category)s, (select id from ins_user))
+                    """
     remove_post_query = '''
                 with del_post as (
                     delete from posts where unique_id = %s
@@ -76,6 +77,11 @@ class PostgreQueryCollection:
                 )
                 delete from users where id = (select user_id from del_post); 
                     '''
+    remove_tables_query = '''
+                                drop table if exists posts cascade;
+                                drop table if exists users cascade;
+                                    '''
+    truncate_tables_query = '''truncate table users cascade'''
     update_post_query = """
                 with upd_post as (
                     update posts 
@@ -95,6 +101,23 @@ class PostgreQueryCollection:
                         comment_karma = %(comment_karma)s
                     where id = (select user_id from upd_post) 
                         """
+    test_mode_identifier_filename = 'test_mode.txt'
+
+    def __init__(self):
+        """Checks whether there is a file indicating that unittests are have been running at the moment.
+
+        If true, replaces queries.
+        """
+        test_mode = os.path.exists(self.test_mode_identifier_filename)
+        if test_mode:
+            self.replace_queries()
+
+    def replace_queries(self):
+        """Changes real table names used for database queries to the test instead"""
+        for attr in dir(self):
+            if not callable(getattr(self, attr)) and not attr.startswith("__"):
+                new_value = getattr(self, attr).replace('users', 'test_users').replace('posts', 'test_posts')
+                setattr(self, attr, new_value)
 
 
 class PostgreConnector:
@@ -131,7 +154,19 @@ class PostgreConnector:
 class PostgreTablesCreator(PostgreConnector):
     def create_tables(self):
         """Creates 2 related tables in a database if they don't exist"""
-        self.cursor.execute(PostgreQueryCollection.create_tables_query)
+        self.cursor.execute(PostgreQueryCollection().create_tables_query)
+
+
+class PostgreTablesRemover(PostgreConnector):
+    def remove_tables(self):
+        """Removes 2 related tables from a database if they exist"""
+        self.cursor.execute(PostgreQueryCollection().remove_tables_query)
+
+
+class PostgreTablesTruncator(PostgreConnector):
+    def truncate_tables(self):
+        """Truncates 2 related tables"""
+        self.cursor.execute(PostgreQueryCollection().truncate_tables_query)
 
 
 class PostgreAllPostsInserter(PostgreConnector):
@@ -143,7 +178,7 @@ class PostgreAllPostsInserter(PostgreConnector):
     def insert_all_posts_into_db(self):
         """Saves all posts data to the tables"""
         for post_dict in self.post_data:
-            self.cursor.execute(PostgreQueryCollection.insert_post_query, post_dict)
+            self.cursor.execute(PostgreQueryCollection().insert_post_query, post_dict)
 
 
 class PostgreAllPostsGetter(PostgreConnector):
@@ -153,7 +188,7 @@ class PostgreAllPostsGetter(PostgreConnector):
         If any of the tables doesn't exist the relevant exception is thrown.
         """
         try:
-            self.cursor.execute(PostgreQueryCollection.get_all_posts_query)
+            self.cursor.execute(PostgreQueryCollection().get_all_posts_query)
             stored_posts = self.cursor.fetchall()
             return stored_posts
         except psycopg2.errors.UndefinedTable:
@@ -172,7 +207,7 @@ class PostgrePostGetter(PostgreConnector):
         If any of the tables doesn't exist the relevant exception is thrown.
         """
         try:
-            self.cursor.execute(PostgreQueryCollection.get_post_query, self.unique_id)
+            self.cursor.execute(PostgreQueryCollection().get_post_query, self.unique_id)
             result = self.cursor.fetchall()
             if result:
                 stored_post = result[0]
@@ -194,7 +229,7 @@ class PostgrePostRemover(PostgreConnector):
         If any of the tables doesn't exist the relevant exception is thrown.
         """
         try:
-            self.cursor.execute(PostgreQueryCollection.remove_post_query, self.unique_id)
+            self.cursor.execute(PostgreQueryCollection().remove_post_query, self.unique_id)
             return self.cursor.rowcount
         except psycopg2.errors.UndefinedTable:
             raise PostgreExecutorError(self.__class__.__name__, "Table doesn't exist")
@@ -208,12 +243,12 @@ class PostgrePostInserter(PostgrePostGetter):
 
     def define_stored_post_number(self):
         """Defines the exact number of posts stored in a database"""
-        self.cursor.execute(PostgreQueryCollection.get_all_posts_no_users_query)
+        self.cursor.execute(PostgreQueryCollection().get_all_posts_no_users_query)
         return self.cursor.rowcount
 
     def insert_post_into_db(self):
         """Saves post data to the tables"""
-        self.cursor.execute(PostgreQueryCollection.insert_post_query, self.post_dict)
+        self.cursor.execute(PostgreQueryCollection().insert_post_query, self.post_dict)
 
 
 class PostgrePostUpdater(PostgrePostGetter):
