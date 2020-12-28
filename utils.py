@@ -19,6 +19,7 @@ class DataConverter:
 
     @staticmethod
     def convert_date_from_words_to_numbers(date_str):
+        """Takes a string with date containing the month in cursive and converts it to numbers"""
         try:
             date_str = datetime.datetime.strptime(date_str, '%B %d, %Y').strftime('%d.%m.%Y')
         except ValueError:
@@ -27,6 +28,9 @@ class DataConverter:
 
     @staticmethod
     def convert_documents_into_post_dict(documents):
+        """Takes a list of documents with post data from 2 tables, removes _id from each document
+
+        and converts this documents to a post dictionary in a specific sequence."""
         post_dict = {}
         entity_order = ['post', 'user']
         for ind in range(2):

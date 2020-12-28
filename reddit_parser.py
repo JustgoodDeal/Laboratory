@@ -1,5 +1,5 @@
 from bs4 import BeautifulSoup
-from mongo import MongoExecuter
+from mongo import MongoExecutor
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from utils import DataConverter
@@ -12,6 +12,7 @@ import uuid
 class PageLoader:
     def __init__(self, posts_count):
         """Takes needed for writing to file posts count, increases this count by a factor of 1.5 times
+
         to ensure a sufficient number of suitable posts in the final sample.
         """
         self.post_divs_selector = 'div.rpBJOHq2PR60pnwJlUyP0 > div'
@@ -64,6 +65,7 @@ class PostsGetter:
 
 
 class ParserError(Exception):
+    """Takes a name of the class thrown this exception, error text and post url causing it"""
     def __init__(self, thrown_by, text, post_url=None):
         self.thrown_by = thrown_by
         self.text = text
@@ -73,6 +75,7 @@ class ParserError(Exception):
 class PostDataParser:
     def __init__(self, post):
         """Defines queries for searching specific data in HTML, extracts post-related data from HTML and
+
         write this data to dictionary.
         """
         self.category_query = ['a', {"class": "_3ryJoIoycVkA88fy40qNJc"}]
@@ -112,6 +115,12 @@ class PostDataParser:
         self.post_date = DataConverter.convert_time_lapse_to_date(date_and_url_tag.text)
 
     def define_username_karmas_cakeday(self):
+        """Tries to find post creator at first. In case the user is deleted relevant exception is thrown.
+
+        If not, makes a request to the old version of the site to defines post and comment karma,
+        and the request to the new version of the site to define user karma and user cake day.
+        If user's private page is inaccessible to minors, relevant exception is thrown.
+        """
         try:
             user_tag = self.post_soup.findAll(self.username_query[0], self.username_query[1])[0]
         except IndexError:
@@ -134,6 +143,10 @@ class PostDataParser:
         self.user_cake_day = DataConverter.convert_date_from_words_to_numbers(karma_and_cake_tags[1].text)
 
     def define_comments_number(self):
+        """Defines number of comments. If initial query doesn't deliver a result, the second will be used for search.
+
+        If value obtained contains the letter "k" instead of zeros, it's replaced by necessary quantity of zeros.
+        """
         comments_number_tags = self.post_soup.findAll(self.comments_number_query1[0], self.comments_number_query1[1])
         if comments_number_tags:
             comments_number_tag = comments_number_tags[0]
@@ -148,6 +161,10 @@ class PostDataParser:
         self.comments_number = int(self.comments_number.replace('.', '').replace('k', k_replacer))
 
     def define_votes_number(self):
+        """Defines number of votes. If value obtained contains the letter "k" instead of zeros,
+
+        it's replaced by necessary quantity of zeros.
+        """
         votes_number_tag = self.post_soup.findAll(self.votes_number_query[0], self.votes_number_query[1])[1]
         self.votes_number = votes_number_tag.text
         k_replacer = '00' if '.' in self.votes_number else '000'
@@ -169,6 +186,7 @@ class PostDataParser:
     @staticmethod
     def get_html(url):
         """Sends a request to indicated URL and return server response text in HTML format.
+
         In case ReadTimeout error suspends execution of a program for some seconds and send another request.
         """
         headers = {
@@ -187,14 +205,21 @@ class PostDataParser:
 
 class PostsProcessor:
     def __init__(self, url, posts_count):
+        """Takes URL from reddit.com and count of posts which should be saved to MongoDB database.
+
+        Forms a list of all posts in HTML format presented on the webpage.
+        Parses these data and make a list of each post data from them.
+        Stores parsed post data in the database.
+        """
         self.url = url
         self.posts_count = posts_count
         self.all_posts = self.get_posts_list()
         self.parsed_posts_data = self.establish_posts_data()
-        MongoExecuter(posts_list=self.parsed_posts_data).insert_all_posts_into_db()
+        MongoExecutor(posts_list=self.parsed_posts_data).insert_all_posts_into_db()
 
     def get_posts_list(self):
         """Tries to find posts on the webpage in the amount by a factor
+
         of 1.5 times exceeding required to be written to the file.
         Does basic configuration for the logging system,
         logs information about starting of sending requests.
@@ -207,6 +232,7 @@ class PostsProcessor:
 
     def establish_posts_data(self):
         """Parses HTML format posts into dictionaries and adds them to list.
+
         If the count of added posts is equal to needed, stop parsing.
         Logs Parser errors and information about finishing of sending requests.
         """
