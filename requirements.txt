@@ -1,4 +1,4 @@
-bs4
-pymongo
-requests
-selenium
+bs4==0.0.1
+pymongo==3.11.2
+requests==2.25.1
+selenium==3.141.0
