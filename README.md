@@ -20,4 +20,4 @@ In order to launch the project locally, make sure the following mandatory steps 
 
 You can run reddit_parser.py as an autonomous script after having fulfilled all the above.
 
-To start using RESTful service or running located in tests.py unittests, you should run server.py at first.
+To start using RESTful service or running unittests located in tests.py, you should run server.py at first.
