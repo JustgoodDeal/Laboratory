@@ -33,3 +33,17 @@ Assignment#2:
 Если не указано иное, все запросы возвращают код 200 в случае успеха; те, что ссылаются на номер строки, возвращают 404, если строка с запрашиваемым номером не найдена. Если не указано иное, содержимое ответа пусто. Все непустые ответы - в формате JSON. Все действия, выполняющие запрос - в формате JSON.
 
 Для выполнения задания использовать библиотеку Requests."
+
+
+In order to launch the project locally, make sure the following mandatory steps have been met:
+1. Check whether python 3.8 is installed.
+2. The correct versions of the required Python libraries listed in requirements.txt are installed.
+3. Google Chrome browser is installed.
+4. ChromeDriver from https://sites.google.com/a/chromium.org/chromedriver/home is installed, its version should be the same as Google Chrome version.
+5. Perhaps, you will have to specify path to installed ChromeDriver by changing the line in reddit_parser.py:
+   use self.driver = webdriver.Chrome(path=”Your path to file”) instead of webdriver.Chrome().
+
+You can run reddit_parser.py as an autonomous script after having fulfilled all the above.
+
+To start using RESTful service, you should run server.py at first. To run unittests located in tests.py, 
+in addition to running server, concrete file “test-file.txt” should exist in the project directory. You can pull it from GitHub repository, among others. 
