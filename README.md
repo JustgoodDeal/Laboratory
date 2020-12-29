@@ -5,6 +5,9 @@ Assignment#3:
 В результирующией базе должно быть не менее двух таблиц.
 Использование библиотек ORM для выполнения задания запрещается.
 
+_____________________________________________________________________________________________
+
+
 In order to launch the project locally, make sure the following mandatory steps have been met:
 
 1. Check whether python 3.8 is installed.
