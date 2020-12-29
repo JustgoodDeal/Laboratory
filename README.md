@@ -34,6 +34,7 @@ Assignment#2:
 
 Для выполнения задания использовать библиотеку Requests."
 
+_____________________________________________________________________________________________
 
 In order to launch the project locally, make sure the following mandatory steps have been met:
 1. Check whether python 3.8 is installed.
