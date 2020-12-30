@@ -20,17 +20,12 @@ class PageLoader:
 
     def __call__(self, driver):
         """Scrolls down the page unless loaded posts count is sufficient"""
-        self.scroll_down_page(driver)
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         post_divs_loaded = driver.find_elements_by_css_selector(self.post_divs_selector)
         if len(post_divs_loaded) > self.page_posts_count:
             return True
         else:
             return
-
-    @staticmethod
-    def scroll_down_page(driver):
-        """Scrolls down the page"""
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
 
 class PostsGetter:
@@ -183,8 +178,7 @@ class PostDataParser:
                 self.post_dict[entity] = self.post_dict.get(entity, {})
                 self.post_dict[entity][attr_name] = getattr(self, attr_name)
 
-    @staticmethod
-    def get_html(url):
+    def get_html(self, url):
         """Sends a request to indicated URL and return server response text in HTML format.
 
         In case ReadTimeout error suspends execution of a program for some seconds and send another request.

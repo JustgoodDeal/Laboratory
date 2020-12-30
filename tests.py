@@ -67,8 +67,7 @@ class PostDataCollection:
 
 
 class EnvironmentModifier:
-    @staticmethod
-    def prepare_test_environment():
+    def prepare_test_environment(self):
         """Creates a file indicating that unittests are have been running at the moment.
 
         Inserts certain test post data to the test collections.
@@ -77,8 +76,7 @@ class EnvironmentModifier:
             file.write('')
         MongoExecutor().insert_all_posts_into_db(PostDataCollection.posts_list)
 
-    @staticmethod
-    def restore_pre_test_state():
+    def restore_pre_test_state(self):
         """Restores pre-test state of the directory and database. Removes 2 test collections
 
         from a database, deletes a file indicating that unittests are have been running at the moment.
