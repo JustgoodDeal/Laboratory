@@ -52,8 +52,7 @@ class PostDataCollection:
 
 
 class EnvironmentModifier:
-    @staticmethod
-    def prepare_test_environment():
+    def prepare_test_environment(self):
         """Creates a file indicating that unittests are have been running at the moment.
 
         Creates 2 related test tables in a database, inserts certain test post data to the tables.
@@ -65,8 +64,7 @@ class EnvironmentModifier:
         with PostgreAllPostsInserter(PostDataCollection.init_posts_data) as post_inserter:
             post_inserter.insert_all_posts_into_db()
 
-    @staticmethod
-    def restore_pre_test_state():
+    def restore_pre_test_state(self):
         """Restores pre-test state of the directory and database. Removes 2 related test tables
 
         from a database, deletes a file indicating that unittests are have been running at the moment.

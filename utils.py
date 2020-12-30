@@ -1,4 +1,6 @@
 import datetime
+import time
+import requests
 
 
 class DataConverter:
@@ -54,6 +56,25 @@ class DataConverter:
                 except ValueError:
                     ...
         return post_dict
+
+
+def get_html(url):
+    """Sends a request to indicated URL and return server response text in HTML format.
+
+    In case ReadTimeout error suspends execution of a program for some seconds and send another request.
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:45.0) Gecko/20100101 Firefox/45.0'
+    }
+    request_succeed = False
+    while not request_succeed:
+        try:
+            response = requests.get(url, timeout=5, headers=headers)
+            request_succeed = True
+        except requests.exceptions.ReadTimeout:
+            time.sleep(1)
+    response.encoding = 'utf8'
+    return response.text
 
 
 def parse_url(url):
