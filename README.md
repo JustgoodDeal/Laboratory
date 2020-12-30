@@ -5,6 +5,9 @@ Assignment#3:
 В результирующией базе должно быть не менее двух таблиц.
 Использование библиотек ORM для выполнения задания запрещается.
 
+_____________________________________________________________________________________________
+
+
 In order to launch the project locally, make sure the following mandatory steps have been met:
 
 1. Check whether python 3.8 is installed.
@@ -17,4 +20,4 @@ In order to launch the project locally, make sure the following mandatory steps 
 
 You can run reddit_parser.py as an autonomous script after having fulfilled all the above.
 
-To start using RESTful service or running located in tests.py unittests, you should run server.py at first.
+To start using RESTful service or running unittests located in tests.py, you should run server.py at first.
