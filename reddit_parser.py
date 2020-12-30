@@ -1,12 +1,10 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
-from utils import DataConverter, define_path_to_file
+from utils import DataConverter, define_path_to_file, get_html
 import datetime
 import logging
 import os
-import requests
-import time
 import uuid
 
 
@@ -120,8 +118,8 @@ class PostDataParser:
         self.username = user_tag.text[2:]
         user_profile_link_old = "https://old.reddit.com" + user_tag.attrs["href"]
         user_profile_link_new = "https://www.reddit.com" + user_tag.attrs["href"]
-        user_page_text_old = self.get_html(user_profile_link_old)
-        user_page_text_new = self.get_html(user_profile_link_new)
+        user_page_text_old = get_html(user_profile_link_old)
+        user_page_text_new = get_html(user_profile_link_new)
 
         page_text_soup = BeautifulSoup(user_page_text_old, features="html.parser")
         karma_tags = page_text_soup.findAll(self.post_and_comment_karma_query[0], self.post_and_comment_karma_query[1])
@@ -160,24 +158,6 @@ class PostDataParser:
         """Writes previously generated post-related data to dictionary according to a certain order"""
         for attr_name in self.dict_order:
             self.post_dict[attr_name] = getattr(self, attr_name)
-
-    def get_html(self, url):
-        """Sends a request to indicated URL and return server response text in HTML format.
-
-        In case ReadTimeout error suspends execution of a program for some seconds and send another request.
-        """
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:45.0) Gecko/20100101 Firefox/45.0'
-        }
-        request_succeed = False
-        while not request_succeed:
-            try:
-                response = requests.get(url, timeout=5, headers=headers)
-                request_succeed = True
-            except requests.exceptions.ReadTimeout:
-                time.sleep(1)
-        response.encoding = 'utf8'
-        return response.text
 
 
 class FileWriter:
@@ -263,4 +243,4 @@ class PostsProcessor:
 
 
 if __name__ == "__main__":
-    PostsProcessor("https://www.reddit.com/top/?t=month", 1)
+    PostsProcessor("https://www.reddit.com/top/?t=month", 100)
