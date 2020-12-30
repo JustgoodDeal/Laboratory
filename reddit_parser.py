@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
-from utils import DataConverter
+from utils import DataConverter, define_path_to_file
 import datetime
 import logging
 import os
@@ -21,17 +21,12 @@ class PageLoader:
 
     def __call__(self, driver):
         """Scrolls down the page unless loaded posts count is sufficient"""
-        self.scroll_down_page(driver)
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         post_divs_loaded = driver.find_elements_by_css_selector(self.post_divs_selector)
         if len(post_divs_loaded) > self.page_posts_count:
             return True
         else:
             return
-
-    @staticmethod
-    def scroll_down_page(driver):
-        """Scrolls down the page"""
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
 
 class PostsGetter:
@@ -109,7 +104,7 @@ class PostDataParser:
         except IndexError:
             raise ParserError('Parser index error')
         self.post_url = date_and_url_tag.attrs["href"]
-        self.post_date = DataConverter.convert_date(date_and_url_tag.text)
+        self.post_date = DataConverter.convert_time_lapse_to_date(date_and_url_tag.text)
 
     def define_username_karmas_cakeday(self):
         """Tries to find post creator at first. In case the user is deleted relevant exception is thrown.
@@ -166,8 +161,7 @@ class PostDataParser:
         for attr_name in self.dict_order:
             self.post_dict[attr_name] = getattr(self, attr_name)
 
-    @staticmethod
-    def get_html(url):
+    def get_html(self, url):
         """Sends a request to indicated URL and return server response text in HTML format.
 
         In case ReadTimeout error suspends execution of a program for some seconds and send another request.
@@ -209,20 +203,11 @@ class FileWriter:
 
     def remove_old_file(self):
         """Removes no longer needed post data file if existing"""
-        path_to_old_file = self.define_path_to_file('reddit-')
+        path_to_old_file = define_path_to_file('reddit-')
         if path_to_old_file:
             os.remove(path_to_old_file)
 
-    @staticmethod
-    def define_path_to_file(prefix):
-        """Defines path to the file existing in the directory under the prefix contained in the file name"""
-        work_dir_path = os.getcwd()
-        for name in os.listdir(work_dir_path):
-            if os.path.isfile(name) and prefix in name:
-                return os.path.join(work_dir_path, name)
-
-    @staticmethod
-    def define_file_name(file_format):
+    def define_file_name(self, file_format):
         """Defines the name of output file based on the file format and current time"""
         datetime_now = datetime.datetime.now()
         datetime_str = datetime_now.strftime("%Y%m%d%H%M")
@@ -278,4 +263,4 @@ class PostsProcessor:
 
 
 if __name__ == "__main__":
-    PostsProcessor("https://www.reddit.com/top/?t=month", 100)
+    PostsProcessor("https://www.reddit.com/top/?t=month", 1)

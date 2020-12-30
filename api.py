@@ -1,5 +1,5 @@
-from reddit_parser import FileWriter, PostsProcessor
-from utils import check_duplicates, DataConverter, find_line_index
+from reddit_parser import PostsProcessor
+from utils import check_duplicates, DataConverter, define_path_to_file, find_line_index
 import json
 
 
@@ -9,7 +9,7 @@ def get_posts():
     Returns generated list in JSON format and status code 200 if reddit-file exists and isn't empty.
     In all other cases, status code 404 is only returned.
     """
-    file_path = FileWriter.define_path_to_file('reddit-')
+    file_path = define_path_to_file('reddit-')
     posts = []
     status_code = 404
     if file_path:
@@ -32,7 +32,7 @@ def get_line(id):
     and returns this dictionary in JSON format with status code 200.
     In all other cases, status code 404 is only returned.
     """
-    file_path = FileWriter.define_path_to_file('reddit-')
+    file_path = define_path_to_file('reddit-')
     post_dict = {}
     status_code = 404
     if file_path:
@@ -55,12 +55,12 @@ def add_line(post_dict):
     and status code 201 if successful. If equal post data already exists in reddit-file, only returns status code 409.
     In all other cases, including incorrect post data, status code 404 is only returned.
     """
-    file_path = FileWriter.define_path_to_file('reddit-')
+    file_path = define_path_to_file('reddit-')
     posts_list = []
     status_code = 404
     if not file_path:
         PostsProcessor("https://www.reddit.com/top/?t=month", 100)
-        file_path = FileWriter.define_path_to_file('reddit-')
+        file_path = define_path_to_file('reddit-')
     post_dict = json.loads(post_dict)
     if len(post_dict) == 11:
         post_data_str = DataConverter.make_str_from_dict(post_dict)
@@ -86,7 +86,7 @@ def del_line(id):
     and the search was successful, deletes found string from the file and returns status code 200.
     In all other cases, status code 404 is returned.
     """
-    file_path = FileWriter.define_path_to_file('reddit-')
+    file_path = define_path_to_file('reddit-')
     status_code = 404
     if file_path:
         posts_list = open(file_path).readlines()
@@ -107,7 +107,7 @@ def change_line(id, post_dict):
     If equal post data already exists in the file, returns status code 409.
     In all other cases, status code 404 is returned.
     """
-    file_path = FileWriter.define_path_to_file('reddit-')
+    file_path = define_path_to_file('reddit-')
     status_code = 404
     if file_path:
         post_dict = json.loads(post_dict)

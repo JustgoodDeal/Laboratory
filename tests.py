@@ -1,5 +1,5 @@
-from reddit_parser import FileWriter
 from shutil import copy2
+from utils import define_path_to_file
 import json
 import os
 import requests
@@ -16,14 +16,14 @@ class FileReplacer:
         Removes reddit-file and copies test-file to the file with specified name.
         If initially reddit-file didn't exist the creation of temporary file is skipped.
         """
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         if path_to_reddit_file:
             chars_count_to_skip = len('reddit-')
             reddit_f_datetime_start_ind = path_to_reddit_file.rfind('reddit-') + chars_count_to_skip
             reddit_f_datetime = path_to_reddit_file[reddit_f_datetime_start_ind:]
             copy2(path_to_reddit_file, f'temp-{reddit_f_datetime}')
             os.remove(path_to_reddit_file)
-        path_to_test_file = FileWriter.define_path_to_file('test-')
+        path_to_test_file = define_path_to_file('test-')
         copy2(path_to_test_file, self.reddit_test_file_name)
 
     def restore_pre_test_state(self):
@@ -34,7 +34,7 @@ class FileReplacer:
         """
         if os.path.exists(self.reddit_test_file_name):
             os.remove(self.reddit_test_file_name)
-        path_to_temp_file = FileWriter.define_path_to_file('temp-')
+        path_to_temp_file = define_path_to_file('temp-')
         if path_to_temp_file:
             chars_count_to_skip = len('temp-')
             former_reddit_f_datetime_start_ind = path_to_temp_file.rfind('temp-') + chars_count_to_skip
@@ -49,7 +49,7 @@ class DirReorganizerMixin:
         FileReplacer().replace_reddit_by_test_file()
 
     def tearDown(self):
-        """Defines setUp behavior for unittests. Calls the function that restores pre-test state of the directory"""
+        """Defines tearDown behavior for unittests. Calls the function that restores pre-test state of the directory"""
         FileReplacer().restore_pre_test_state()
 
 
@@ -77,14 +77,14 @@ class TestGET(DirReorganizerMixin, unittest.TestCase):
 
     def test_get_posts_no_file(self):
         print('testing get_posts with no file detected')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         os.remove(path_to_reddit_file)
         req = requests.get("http://localhost:8087/posts/", timeout=5)
         self.assertEqual((req.status_code, req.content), (404, b''))
 
     def test_get_posts_empty_file(self):
         print('testing get_posts with empty file')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         with open(path_to_reddit_file, 'w') as file:
             file.write('')
         req = requests.get("http://localhost:8087/posts/", timeout=5)
@@ -98,14 +98,14 @@ class TestGET(DirReorganizerMixin, unittest.TestCase):
 
     def test_get_line_no_file(self):
         print('testing get_line with no file detected')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         os.remove(path_to_reddit_file)
         req = requests.get("http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/", timeout=5)
         self.assertEqual((req.status_code, req.content), (404, b''))
 
     def test_get_line_empty_file(self):
         print('testing get_posts with empty file')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         with open(path_to_reddit_file, 'w') as file:
             file.write('')
         req = requests.get("http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/", timeout=5)
@@ -132,7 +132,7 @@ class TestPOST(DirReorganizerMixin, unittest.TestCase):
 
     def test_add_line_empty_file(self):
         print('testing add_line with empty file')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         with open(path_to_reddit_file, 'w') as file:
             file.write('')
         post_data = PostDataCollection.existent_post_dict
@@ -170,14 +170,14 @@ class TestDELETE(DirReorganizerMixin, unittest.TestCase):
 
     def test_del_line_no_file(self):
         print('testing del_line with no file detected')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         os.remove(path_to_reddit_file)
         req = requests.delete("http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/", timeout=5)
         self.assertEqual(req.status_code, 404)
 
     def test_del_line_empty_file(self):
         print('testing del_line with empty file')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         with open(path_to_reddit_file, 'w') as file:
             file.write('')
         req = requests.delete("http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/", timeout=5)
@@ -205,7 +205,7 @@ class TestPUT(DirReorganizerMixin, unittest.TestCase):
 
     def test_change_line_no_file(self):
         print('testing change_line with no file detected')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         os.remove(path_to_reddit_file)
         post_data = PostDataCollection.nonexistent_post_dict
         post_data_json = json.dumps(post_data)
@@ -215,7 +215,7 @@ class TestPUT(DirReorganizerMixin, unittest.TestCase):
 
     def test_change_line_empty_file(self):
         print('testing change_line with empty file')
-        path_to_reddit_file = FileWriter.define_path_to_file('reddit-')
+        path_to_reddit_file = define_path_to_file('reddit-')
         with open(path_to_reddit_file, 'w') as file:
             file.write('')
         post_data = PostDataCollection.existent_post_dict

@@ -1,4 +1,5 @@
 import datetime
+import os
 
 
 class DataConverter:
@@ -23,7 +24,7 @@ class DataConverter:
         return post_dict
 
     @staticmethod
-    def convert_date(date_str):
+    def convert_time_lapse_to_date(date_str):
         """Takes a string containing time lapse between publishing post and current time.
 
         ('just now', '7 days ago', '1 month ago', etc.). Converts it to the date when the post was published.
@@ -36,6 +37,14 @@ class DataConverter:
             days = int(date_str.split()[0])
         date = datetime.datetime.today() - datetime.timedelta(days=days)
         return date.strftime("%d.%m.%Y")
+
+
+def define_path_to_file(prefix):
+    """Defines path to the file existing in the directory under the prefix contained in the file name"""
+    work_dir_path = os.getcwd()
+    for name in os.listdir(work_dir_path):
+        if os.path.isfile(name) and prefix in name:
+            return os.path.join(work_dir_path, name)
 
 
 def check_duplicates(post_data_str, posts_list):
