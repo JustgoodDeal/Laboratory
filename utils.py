@@ -1,6 +1,8 @@
 import datetime
+import logging
 import time
 import requests
+import yaml
 
 
 class DataConverter:
@@ -57,11 +59,38 @@ class DataConverter:
                     ...
         return post_dict
 
+    @staticmethod
+    def convert_data_from_yaml_to_dict():
+        """Tries to convert data from config file in yaml format to dictionary. If the config file contains
+        data which couldn't be converted to dictionary or yaml file doesn't exist, returns empty dictionary.
+        """
+        config_dict = {}
+        try:
+            with open("config.yaml") as file:
+                config_dict = yaml.safe_load(file)
+                if not type(config_dict) is dict:
+                    config_dict = {}
+        except FileNotFoundError:
+            ...
+        return config_dict
+
+
+def define_connection_entries(default_connection_entries):
+    """Defines connection entries under config file. If any of the entry isn't specified
+
+    in the config file, default value is set for this entry.
+    """
+    config_dict = DataConverter.convert_data_from_yaml_to_dict()
+    conn_entries = {}
+    for entry in default_connection_entries:
+        conn_entries[entry] = config_dict.get(entry) or default_connection_entries[entry]
+    return conn_entries
+
 
 def get_html(url):
     """Sends a request to indicated URL and return server response text in HTML format.
 
-    In case ReadTimeout error suspends execution of a program for some seconds and send another request.
+    In case ReadTimeout error, logs it, suspends execution of a program for some seconds, and send another request.
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:45.0) Gecko/20100101 Firefox/45.0'
@@ -72,6 +101,7 @@ def get_html(url):
             response = requests.get(url, timeout=5, headers=headers)
             request_succeed = True
         except requests.exceptions.ReadTimeout:
+            logging.error(f'ReadTimeout, user URL: {url}')
             time.sleep(1)
     response.encoding = 'utf8'
     return response.text

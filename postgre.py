@@ -1,3 +1,4 @@
+from utils import define_connection_entries
 import logging
 import os
 import psycopg2
@@ -147,7 +148,7 @@ class PostgreConnector:
 
     def connect_to_db(self):
         """Creates a new database connection with certain connection parameters"""
-        connection = psycopg2.connect(**self.connection_entries)
+        connection = psycopg2.connect(**define_connection_entries(self.connection_entries))
         return connection
 
 

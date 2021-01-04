@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor
 from postgre import PostgreAllPostsInserter, PostgreTablesCreator
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
@@ -29,7 +30,7 @@ class PageLoader:
 class PostsGetter:
     def __init__(self, url, posts_count):
         """Initializes Chrome webdriver, sets posts load waiting limit"""
-        self.driver = webdriver.Chrome()
+        self.driver = webdriver.Chrome(executable_path=self.define_path_to_webdriver())
         self.posts_query = ['div', {'class': '_1oQyIsiPHYt6nx7VOmd1sz'}]
         self.url = url
         self.posts_count = posts_count
@@ -45,14 +46,24 @@ class PostsGetter:
         self.driver.quit()
         return True
 
+    def define_path_to_webdriver(self):
+        """Defines path to Chrome webdriver under config file"""
+        config_dict = DataConverter.convert_data_from_yaml_to_dict()
+        path_from_config = config_dict.get('executable_path')
+        executable_path = path_from_config if path_from_config else 'chromedriver'
+        return executable_path
+
     def get_posts(self):
-        """After waiting for the page to be loaded, finds all the posts presented on the page"""
+        """After waiting for the page to be loaded, finds all the posts presented on the page and
+
+        returns them in a quantity that does not exceed needed post count twice.
+        """
         all_posts = []
         try:
             WebDriverWait(self.driver, self.wait_seconds).until(PageLoader(self.posts_count))
             page_text = self.driver.page_source
             page_text_soup = BeautifulSoup(page_text, features="html.parser")
-            all_posts = page_text_soup.findAll(self.posts_query[0], self.posts_query[1])
+            all_posts = page_text_soup.findAll(self.posts_query[0], self.posts_query[1])[:self.posts_count * 2]
         finally:
             return all_posts
 
@@ -87,13 +98,14 @@ class PostDataParser:
                               'define_votes_number', 'define_category']
         self.dict_order = ['username', 'user_karma', 'user_cake_day', 'post_karma', 'comment_karma', 'unique_id',
                            'post_url', 'post_date', 'comments_number', 'votes_number', 'post_category']
-        self.extract_data()
-        self.make_post_dict()
 
-    def extract_data(self):
-        """Calls class methods according to a certain order"""
+    def make_post_dict(self):
+        """Generates post-related data and writes it to dictionary according to a certain order"""
         for method_name in self.methods_order:
             getattr(self, method_name)()
+        for attr_name in self.dict_order:
+            self.post_dict[attr_name] = getattr(self, attr_name)
+        return self.post_dict
 
     def define_url_date(self):
         """Defines post URL and post date, suppresses IndexError that could be thrown if tag isn't found"""
@@ -165,11 +177,6 @@ class PostDataParser:
         category_tag = self.post_soup.findAll(self.category_query[0], self.category_query[1])[1]
         self.post_category = category_tag.text[2:]
 
-    def make_post_dict(self):
-        """Writes previously generated post-related data to dictionary according to a certain order"""
-        for attr_name in self.dict_order:
-            self.post_dict[attr_name] = getattr(self, attr_name)
-
 
 class PostsProcessor:
     def __init__(self, url, posts_count):
@@ -178,10 +185,12 @@ class PostsProcessor:
         Forms a list of all posts in HTML format presented on the webpage.
         Parses these data and make a list of each post data from them.
         Stores parsed post data in the database.
+        Logs information about program life-cycle process.
         """
         self.url = url
         self.posts_count = posts_count
         self.all_posts = self.get_posts_list()
+        logging.info('Stop running Chrome webdriver')
         self.parsed_post_data = self.establish_post_data()
         self.save_all_posts_to_db()
 
@@ -190,31 +199,35 @@ class PostsProcessor:
 
         of 1.5 times exceeding required to be written to the file.
         Does basic configuration for the logging system,
-        logs information about starting of sending requests.
+        logs information about starting of running Chrome webdriver.
         """
         logging.basicConfig(filename="programLogs.log", level=logging.INFO,
                             format='%(asctime)s. %(levelname)s: %(message)s')
-        logging.info('Start sending requests')
+        logging.info('Start running Chrome webdriver')
         with PostsGetter(self.url, self.posts_count) as pg:
             return pg.get_posts()
 
     def establish_post_data(self):
-        """Parses HTML format posts into dictionaries and adds them to list.
+        """Starts thread-team for parsing HTML format posts into dictionaries, which are added to a list.
 
-        If the count of added posts is equal to needed, stop parsing.
+        If the count of added posts is equal to needed, stop thread-team.
         Logs Parser errors and information about finishing of sending requests.
         """
         parsed_post_data = []
-        for post in self.all_posts:
-            if len(parsed_post_data) == self.posts_count:
-                break
-            try:
-                post_dict = PostDataParser(post).post_dict
-            except ParserError as err:
-                logging.error(f'{err.thrown_by}: {err.text}, post URL: {err.post_url}')
-                continue
-            parsed_post_data.append(post_dict)
-        logging.info('Stop sending requests')
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            logging.info('Start sending requests')
+            for post in self.all_posts:
+                futures.append(executor.submit(PostDataParser(post).make_post_dict))
+            for future in futures:
+                if len(parsed_post_data) == self.posts_count:
+                    break
+                try:
+                    parsed_post_data.append(future.result())
+                except ParserError as err:
+                    logging.error(f'{err.text}, post URL: {err.post_url}')
+                    continue
+            logging.info('Stop sending requests')
         return parsed_post_data
 
     def save_all_posts_to_db(self):
