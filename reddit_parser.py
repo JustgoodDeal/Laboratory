@@ -1,5 +1,5 @@
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import as_completed, ThreadPoolExecutor
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from utils import DataConverter, define_path_to_file, get_html
@@ -70,14 +70,15 @@ class PostsGetter:
 
 
 class ParserError(Exception):
-    def __init__(self, text, post_url=None):
+    def __init__(self, text, post_index, post_url=None):
         """Takes error text and post url which raised the exception"""
         self.text = text
+        self.post_index = post_index
         self.post_url = post_url
 
 
 class PostDataParser:
-    def __init__(self, post):
+    def __init__(self, post_index, post):
         """Defines queries for searching specific data in HTML, extracts post-related data from HTML and
 
         write this data to dictionary.
@@ -90,14 +91,15 @@ class PostDataParser:
         self.post_and_comment_karma_query = ['span', {"class": "karma"}]
         self.votes_count_query = ['div', {"class": "_1rZYMD_4xY3gRcSS3p8ODO"}]
         self.username_query = ['a', {"class": "_2tbHP6ZydRpjI44J3syuqC"}]
+        self.post_index = post_index
         self.post = str(post)
         self.post_soup = BeautifulSoup(self.post, features="html.parser")
         self.post_dict = {}
         self.unique_id = uuid.uuid1().hex
         self.methods_order = ['define_url_date', 'define_username_karmas_cakeday', 'define_comments_count',
                               'define_votes_count', 'define_category']
-        self.dict_order = ['unique_id', 'post_url', 'username', 'user_karma', 'user_cake_day', 'post_karma',
-                           'comment_karma', 'post_date', 'comments_count', 'votes_count', 'post_category']
+        self.dict_order = ['post_index', 'unique_id', 'post_url', 'username', 'user_karma', 'user_cake_day',
+                           'post_karma', 'comment_karma', 'post_date', 'comments_count', 'votes_count', 'post_category']
 
     def make_post_dict(self):
         """Generates post-related data and writes it to dictionary according to a certain order"""
@@ -112,7 +114,7 @@ class PostDataParser:
         try:
             date_and_url_tag = self.post_soup.findAll(self.date_and_url_query[0], self.date_and_url_query[1])[0]
         except IndexError:
-            raise ParserError('Parser index error')
+            raise ParserError('Parser index error', self.post_index)
         self.post_url = date_and_url_tag.attrs["href"]
         self.post_date = DataConverter.convert_time_lapse_to_date(date_and_url_tag.text)
 
@@ -126,7 +128,7 @@ class PostDataParser:
         try:
             user_tag = self.post_soup.findAll(self.username_query[0], self.username_query[1])[0]
         except IndexError:
-            raise ParserError("User doesn't exist", self.post_url)
+            raise ParserError("User doesn't exist", self.post_index, self.post_url)
         self.username = user_tag.text[2:]
         user_profile_link_old = "https://old.reddit.com" + user_tag.attrs["href"]
         user_profile_link_new = "https://www.reddit.com" + user_tag.attrs["href"]
@@ -136,7 +138,7 @@ class PostDataParser:
         page_text_soup = BeautifulSoup(user_page_text_old, features="html.parser")
         karma_tags = page_text_soup.findAll(self.post_and_comment_karma_query[0], self.post_and_comment_karma_query[1])
         if not karma_tags:
-            raise ParserError("Page inaccessible to minors", self.post_url)
+            raise ParserError("Page inaccessible to minors", self.post_index, self.post_url)
         page_text_soup = BeautifulSoup(user_page_text_new, features="html.parser")
         karma_and_cake_tags = page_text_soup.findAll(self.karma_and_cake_day_query[0], self.karma_and_cake_day_query[1])
         self.post_karma = karma_tags[0].text
@@ -215,8 +217,8 @@ class PostsProcessor:
         self.posts_count = posts_count
         self.all_posts = self.get_posts_list(self.url, self.posts_count)
         logging.info('Stop running Chrome webdriver')
-        self.parsed_post_data = self.establish_post_data()
-        FileWriter(self.parsed_post_data)
+        self.parsed_posts_data = self.establish_post_data()
+        FileWriter(self.parsed_posts_data)
 
     def get_posts_list(self, url, posts_count):
         """Tries to find posts on indicated URL in the amount by a factor
@@ -237,22 +239,31 @@ class PostsProcessor:
         If the count of added posts is equal to needed, stop thread-team.
         Logs Parser errors and information about finishing of sending requests.
         """
-        parsed_post_data = []
+        parsed_posts_data = []
         with ThreadPoolExecutor() as executor:
             futures = []
             logging.info('Start sending requests')
-            for post in self.all_posts:
-                futures.append(executor.submit(PostDataParser(post).make_post_dict))
-            for future in futures:
-                if len(parsed_post_data) == self.posts_count:
-                    break
+            for post_index, post in enumerate(self.all_posts):
+                futures.append(executor.submit(PostDataParser(post_index, post).make_post_dict))
+            exceptions_count = 0
+            for future in as_completed(futures):
+                needed_posts_count = self.posts_count + exceptions_count
+                if len(parsed_posts_data) >= needed_posts_count:
+                    latest_needed_post_index = parsed_posts_data[needed_posts_count - 1]['post_index']
+                    if latest_needed_post_index == needed_posts_count - 1:
+                        break
                 try:
-                    parsed_post_data.append(future.result())
+                    parsed_posts_data.append(future.result())
+                    parsed_posts_data = sorted(parsed_posts_data, key=lambda post_dict: post_dict['post_index'])
                 except ParserError as err:
                     logging.error(f'{err.text}, post URL: {err.post_url}')
+                    parsed_posts_data.append({'post_index': err.post_index})
+                    exceptions_count += 1
                     continue
             logging.info('Stop sending requests')
-        return parsed_post_data
+            [post_dict.pop('post_index') for post_dict in parsed_posts_data]
+            parsed_posts_data = [post_dict for post_dict in parsed_posts_data if post_dict][:self.posts_count]
+        return parsed_posts_data
 
 
 if __name__ == "__main__":
