@@ -30,11 +30,17 @@ In order to launch the project locally, make sure the following mandatory steps 
 9. Path to ChromeDriver and parameters for connection to PostgreSQL are specified in the configuration file. For that:
    - create the file named "config.yaml" in the project folder.
    - set up "config.yaml" with the following configuration:
+   
    `executable_path: your_path_to_chromedriver`
+   
    `database: your_postgres_db_name`
+   
    `user: your_postgres_db_user`
+   
    `password: your_postgres_db_password`
+   
    `host: your_host`
+   
    `port: your_port`
 
 You can run reddit_parser.py as an autonomous script after having fulfilled all the above.
