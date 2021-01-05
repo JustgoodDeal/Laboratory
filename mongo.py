@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-from utils import DataConverter
+from utils import DataConverter, define_connection_entries, define_database_name
 import os
 
 
@@ -20,8 +20,8 @@ class MongoExecutor:
         If true, replaces collection names. Gets posts and users collections by defined names.
         May take a unique id of the post.
         """
-        self.client = MongoClient(**self.connection_entries)
-        self.database = self.client[self.database_name]
+        self.client = MongoClient(**define_connection_entries(self.connection_entries))
+        self.database = self.client[define_database_name(self.database_name)]
         test_mode = os.path.exists(self.test_mode_identifier_filename)
         if test_mode:
             self.replace_collection_names()
