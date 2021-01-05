@@ -191,7 +191,7 @@ class PostsProcessor:
         self.posts_count = posts_count
         self.all_posts = self.get_posts_list()
         logging.info('Stop running Chrome webdriver')
-        self.parsed_post_data = self.establish_post_data()
+        self.parsed_posts_data = self.establish_post_data()
         self.save_all_posts_to_db()
 
     def get_posts_list(self):
@@ -213,28 +213,28 @@ class PostsProcessor:
         If the count of added posts is equal to needed, stop thread-team.
         Logs Parser errors and information about finishing of sending requests.
         """
-        parsed_post_data = []
+        parsed_posts_data = []
         with ThreadPoolExecutor() as executor:
             futures = []
             logging.info('Start sending requests')
             for post in self.all_posts:
                 futures.append(executor.submit(PostDataParser(post).make_post_dict))
             for future in futures:
-                if len(parsed_post_data) == self.posts_count:
+                if len(parsed_posts_data) == self.posts_count:
                     break
                 try:
-                    parsed_post_data.append(future.result())
+                    parsed_posts_data.append(future.result())
                 except ParserError as err:
                     logging.error(f'{err.text}, post URL: {err.post_url}')
                     continue
             logging.info('Stop sending requests')
-        return parsed_post_data
+        return parsed_posts_data
 
     def save_all_posts_to_db(self):
         """Creates tables in PostgreSQL database if they don't exist. Saves parsed post data to the tables"""
         with PostgreTablesCreator() as tables_creator:
             tables_creator.create_tables()
-        with PostgreAllPostsInserter(self.parsed_post_data) as post_inserter:
+        with PostgreAllPostsInserter(self.parsed_posts_data) as post_inserter:
             post_inserter.insert_all_posts_into_db()
 
 
