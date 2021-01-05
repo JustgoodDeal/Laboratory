@@ -1,23 +1,43 @@
 Assignment#3:
 
 Доработать приложение из Assignment#2 таким образом, чтобы сохранение данных вместо выходного файла на диске
-осуществлялось в базу данных. Количество постов для записи в БД = 1000.
-Задание сделать для двух вариантов БД: 1) PostgreSQL и 2) MongoDB.
-В результирующих базах должно быть не менее двух таблиц и коллекций соответственно.
+осуществлялось в базу данных MongoDB. Количество постов для записи в БД = 1000.
+В результирующией базе должно быть не менее двух коллекций.
 Использование библиотек ORM для выполнения задания запрещается.
 
 _____________________________________________________________________________________________
 
 
 In order to launch the project locally, make sure the following mandatory steps have been met:
-
-1. Check whether python 3.8 is installed.
-2. The correct versions of the required Python libraries listed in requirements.txt are installed.
-3. Google Chrome browser is installed.
-4. ChromeDriver from https://sites.google.com/a/chromium.org/chromedriver/home is installed, its version should be the same as Google Chrome version.
-5. Perhaps, you will have to specify path to installed ChromeDriver by changing the line in reddit_parser.py: use self.driver = webdriver.Chrome(path=”Your path to file”) instead of webdriver.Chrome().
-6. Check whether you have MongoDB installed.
-7. Change the attribute connection_entries in the class MongoExecutor of mongo.py, if you wish to use another host or port to connect to a database instead of specified there.
+1. You have Python 3.8.5 installed. For that:
+    * Install pyenv prerequisites for your OS:
+      https://github.com/pyenv/pyenv/wiki/Common-build-problems#prerequisites
+    * Install pyenv: `curl https://pyenv.run | bash`
+    * Install Python 3.8.5 using pyenv: `pyenv install 3.8.5`
+2. `python` command for project folder is overriden:
+   `pyenv local 3.8.5`
+3. Virtual environment is created. For that:
+   `python -m venv venv`
+   - then activate the virtual environment:
+   `source venv/bin/activate`
+4. Packages pip and setuptools are up-to-date:
+   `pip install -U pip setuptools`
+5. Python dependencies are installed:
+   `pip install -r requirements.txt`
+6. Google Chrome browser is installed.
+7. ChromeDriver from https://sites.google.com/a/chromium.org/chromedriver/home is installed, and its version is the same as Google Chrome version.
+8. MongoDB database is installed.
+9. Path to ChromeDriver and parameters for connection to MongoDB are specified in the configuration file. For that:
+   - create the file named "config.yaml" in the project folder.
+   - set up "config.yaml" with the following configuration:
+   
+   `executable_path: your_path_to_chromedriver`
+   
+   `database: your_mongo_db_name`
+      
+   `host: your_host`
+   
+   `port: your_port`
 
 You can run reddit_parser.py as an autonomous script after having fulfilled all the above.
 To start using RESTful service or running unittests located in tests.py, you should run server.py at first.
