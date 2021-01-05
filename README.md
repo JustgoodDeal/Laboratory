@@ -57,7 +57,7 @@ In order to launch the project locally, make sure the following mandatory steps 
 8. Path to ChromeDriver is specified in the configuration file. For that:
    - create the file named "config.yaml" in the project folder.
    - set up "config.yaml" with the following configuration:
-   executable_path: your_path_to_chromedriver
+   `executable_path: your_path_to_chromedriver`
 
 You can run reddit_parser.py as an autonomous script after having fulfilled all the above.
 
