@@ -1,11 +1,13 @@
 from bs4 import BeautifulSoup
-from concurrent.futures import as_completed, ThreadPoolExecutor
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
-from utils import DataConverter, define_path_to_file, get_html
+from utils import DataConverter, define_path_to_file, get_html, posts_list_is_ready_check
 import datetime
 import logging
+import math
 import os
+import time
+import threading
 import uuid
 
 
@@ -16,7 +18,7 @@ class PageLoader:
         to ensure a sufficient number of suitable posts in the final sample.
         """
         self.post_divs_selector = 'div.rpBJOHq2PR60pnwJlUyP0 > div'
-        self.page_posts_count = posts_count + posts_count // 2
+        self.page_posts_count = math.ceil(posts_count * 1.5)
 
     def __call__(self, driver):
         """Scrolls down the page unless loaded posts count is sufficient"""
@@ -57,31 +59,31 @@ class PostsGetter:
     def get_posts(self):
         """After waiting for the page to be loaded, finds all the posts presented on the page and
 
-        returns them in a quantity that does not exceed needed post count twice.
+        returns them in a quantity that does not exceed needed post count triple.
         """
         all_posts = []
         try:
             WebDriverWait(self.driver, self.wait_seconds).until(PageLoader(self.posts_count))
             page_text = self.driver.page_source
             page_text_soup = BeautifulSoup(page_text, features="html.parser")
-            all_posts = page_text_soup.findAll(self.posts_query[0], self.posts_query[1])[:self.posts_count * 2]
+            all_posts = page_text_soup.findAll(self.posts_query[0], self.posts_query[1])[:self.posts_count * 3]
         finally:
             return all_posts
 
 
 class ParserError(Exception):
     def __init__(self, text, post_index, post_url=None):
-        """Takes error text and post url which raised the exception"""
+        """Takes error text, index and url of the post which raised the exception"""
         self.text = text
         self.post_index = post_index
         self.post_url = post_url
 
 
 class PostDataParser:
-    def __init__(self, post_index, post):
-        """Defines queries for searching specific data in HTML, extracts post-related data from HTML and
+    def __init__(self, post_index, post, posts_list):
+        """Sets out queries for searching specific data in HTML and
 
-        write this data to dictionary.
+        the order of calling methods and making dictionary.
         """
         self.category_query = ['a', {"class": "_3ryJoIoycVkA88fy40qNJc"}]
         self.comments_count_query1 = ['span', {"class": "D6SuXeSnAAagG8dKAb4O4"}]
@@ -93,6 +95,7 @@ class PostDataParser:
         self.username_query = ['a', {"class": "_2tbHP6ZydRpjI44J3syuqC"}]
         self.post_index = post_index
         self.post = str(post)
+        self.posts_list = posts_list
         self.post_soup = BeautifulSoup(self.post, features="html.parser")
         self.post_dict = {}
         self.unique_id = uuid.uuid1().hex
@@ -101,13 +104,20 @@ class PostDataParser:
         self.dict_order = ['post_index', 'unique_id', 'post_url', 'username', 'user_karma', 'user_cake_day',
                            'post_karma', 'comment_karma', 'post_date', 'comments_count', 'votes_count', 'post_category']
 
-    def make_post_dict(self):
-        """Generates post-related data and writes it to dictionary according to a certain order"""
-        for method_name in self.methods_order:
-            getattr(self, method_name)()
-        for attr_name in self.dict_order:
-            self.post_dict[attr_name] = getattr(self, attr_name)
-        return self.post_dict
+    def add_post_data_to_list(self):
+        """Generates post-related data, writes it to a dictionary, which is added to posts list.
+
+        If Parser error occurred, logs it and writes index of the post which raised the exception to the dictionary.
+        """
+        try:
+            for method_name in self.methods_order:
+                getattr(self, method_name)()
+            for attr_name in self.dict_order:
+                self.post_dict[attr_name] = getattr(self, attr_name)
+        except ParserError as err:
+            logging.error(f'{err.text}, post URL: {err.post_url}')
+            self.post_dict = {'post_index': err.post_index}
+        self.posts_list.append(self.post_dict)
 
     def define_url_date(self):
         """Defines post URL and post date, suppresses IndexError that could be thrown if tag isn't found"""
@@ -234,35 +244,25 @@ class PostsProcessor:
             return pg.get_posts()
 
     def establish_post_data(self):
-        """Starts thread-team for parsing HTML format posts into dictionaries, which are added to a list.
+        """Starts thread-team for parsing HTML format posts into dictionaries, which will be added to posts list.
 
-        If the count of added posts is equal to needed, stop thread-team.
-        Logs Parser errors and information about finishing of sending requests.
+        If order and count of the posts meeting the criteria corresponds to needed, stop thread-team.
+        Logs the information about starting and finishing of sending requests.
         """
-        parsed_posts_data = []
-        with ThreadPoolExecutor() as executor:
-            futures = []
-            logging.info('Start sending requests')
-            for post_index, post in enumerate(self.all_posts):
-                futures.append(executor.submit(PostDataParser(post_index, post).make_post_dict))
-            exceptions_count = 0
-            for future in as_completed(futures):
-                needed_posts_count = self.posts_count + exceptions_count
-                if len(parsed_posts_data) >= needed_posts_count:
-                    latest_needed_post_index = parsed_posts_data[needed_posts_count - 1]['post_index']
-                    if latest_needed_post_index == needed_posts_count - 1:
-                        break
-                try:
-                    parsed_posts_data.append(future.result())
-                    parsed_posts_data = sorted(parsed_posts_data, key=lambda post_dict: post_dict['post_index'])
-                except ParserError as err:
-                    logging.error(f'{err.text}, post URL: {err.post_url}')
-                    parsed_posts_data.append({'post_index': err.post_index})
-                    exceptions_count += 1
-                    continue
-            logging.info('Stop sending requests')
-            [post_dict.pop('post_index') for post_dict in parsed_posts_data]
-            parsed_posts_data = [post_dict for post_dict in parsed_posts_data if post_dict][:self.posts_count]
+        posts_data = []
+        logging.info('Start sending requests')
+        for ind, post in enumerate(self.all_posts):
+            threading.Thread(target=PostDataParser(ind, post, posts_data).add_post_data_to_list, daemon=True).start()
+        start_timeout = self.posts_count // 5
+        time.sleep(start_timeout)
+        while True:
+            if posts_list_is_ready_check(posts_data, self.posts_count, len(self.all_posts)):
+                break
+            time.sleep(0.5)
+        logging.info('Stop sending requests')
+        parsed_posts_data = sorted(posts_data[::], key=lambda post_dict: post_dict['post_index'])
+        [post_dict.pop('post_index') for post_dict in parsed_posts_data]
+        parsed_posts_data = [post_dict for post_dict in parsed_posts_data if post_dict][:self.posts_count]
         return parsed_posts_data
 
 
