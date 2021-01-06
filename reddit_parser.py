@@ -1,10 +1,12 @@
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor
 from mongo import MongoExecutor
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
-from utils import DataConverter, get_html
+from utils import DataConverter, get_html, posts_list_is_ready_check
 import logging
+import math
+import time
+import threading
 import uuid
 
 
@@ -15,7 +17,7 @@ class PageLoader:
         to ensure a sufficient number of suitable posts in the final sample.
         """
         self.post_divs_selector = 'div.rpBJOHq2PR60pnwJlUyP0 > div'
-        self.page_posts_count = posts_count + posts_count // 2
+        self.page_posts_count = math.ceil(posts_count * 1.5)
 
     def __call__(self, driver):
         """Scrolls down the page unless loaded posts count is sufficient"""
@@ -56,31 +58,32 @@ class PostsGetter:
     def get_posts(self):
         """After waiting for the page to be loaded, finds all the posts presented on the page and
 
-        returns them in a quantity that does not exceed needed post count twice.
+        returns them in a quantity that does not exceed needed post count triple.
         """
         all_posts = []
         try:
             WebDriverWait(self.driver, self.wait_seconds).until(PageLoader(self.posts_count))
             page_text = self.driver.page_source
             page_text_soup = BeautifulSoup(page_text, features="html.parser")
-            all_posts = page_text_soup.findAll(self.posts_query[0], self.posts_query[1])[:self.posts_count * 2]
+            all_posts = page_text_soup.findAll(self.posts_query[0], self.posts_query[1])[:self.posts_count * 3]
         finally:
             return all_posts
 
 
 class ParserError(Exception):
-    """Takes a name of the class thrown this exception, error text and post url causing it"""
-    def __init__(self, thrown_by, text, post_url=None):
+    def __init__(self, thrown_by, text, post_index, post_url=None):
+        """Takes a name of the class thrown this exception, error text, index and url of the post causing it"""
         self.thrown_by = thrown_by
         self.text = text
+        self.post_index = post_index
         self.post_url = post_url
 
 
 class PostDataParser:
-    def __init__(self, post):
-        """Defines queries for searching specific data in HTML, extracts post-related data from HTML and
+    def __init__(self, post_index, post, posts_list):
+        """Sets out queries for searching specific data in HTML and
 
-        write this data to dictionary.
+        the order of calling methods and making dictionary.
         """
         self.category_query = ['a', {"class": "_3ryJoIoycVkA88fy40qNJc"}]
         self.comments_number_query1 = ['span', {"class": "D6SuXeSnAAagG8dKAb4O4"}]
@@ -90,7 +93,9 @@ class PostDataParser:
         self.post_and_comment_karma_query = ['span', {"class": "karma"}]
         self.votes_number_query = ['div', {"class": "_1rZYMD_4xY3gRcSS3p8ODO"}]
         self.username_query = ['a', {"class": "_2tbHP6ZydRpjI44J3syuqC"}]
+        self.post_index = post_index
         self.post = str(post)
+        self.posts_list = posts_list
         self.post_soup = BeautifulSoup(self.post, features="html.parser")
         self.post_dict = {}
         self.unique_id = uuid.uuid1().hex
@@ -98,27 +103,35 @@ class PostDataParser:
         self.methods_order = ['define_url_date', 'define_username_karmas_cakeday', 'define_comments_number',
                               'define_votes_number', 'define_category']
         self.dict_order = {
-            'post': ['unique_id', 'post_url', 'post_date', 'comments_number', 'votes_number', 'post_category'],
-            'user': ['username', 'user_karma', 'user_cake_day', 'post_karma', 'comment_karma', 'post_unique_id']
+            'post': ['post_index', 'unique_id', 'post_url', 'post_date', 'comments_number', 'votes_number',
+                     'post_category'],
+            'user': ['username', 'user_karma', 'user_cake_day', 'post_karma', 'comment_karma', 'post_unique_id'],
         }
 
-    def make_post_dict(self):
-        """Generates post-related data and writes it to dictionary according to a certain order"""
-        for method_name in self.methods_order:
-            getattr(self, method_name)()
-        for entity in self.dict_order:
-            entity_order = self.dict_order[entity]
-            for attr_name in entity_order:
-                self.post_dict[entity] = self.post_dict.get(entity, {})
-                self.post_dict[entity][attr_name] = getattr(self, attr_name)
-        return self.post_dict
+    def add_post_data_to_list(self):
+        """Generates post-related data, writes it to a dictionary, which is added to posts list.
+
+        If Parser error occurred, logs it and writes index of the post which raised the exception to the dictionary.
+        """
+        try:
+            for method_name in self.methods_order:
+                getattr(self, method_name)()
+            for entity in self.dict_order:
+                entity_order = self.dict_order[entity]
+                for attr_name in entity_order:
+                    self.post_dict[entity] = self.post_dict.get(entity, {})
+                    self.post_dict[entity][attr_name] = getattr(self, attr_name)
+        except ParserError as err:
+            logging.error(f'{err.thrown_by}, {err.text}, post URL: {err.post_url}')
+            self.post_dict = {'post': {'post_index': err.post_index}}
+        self.posts_list.append(self.post_dict)
 
     def define_url_date(self):
         """Defines post URL and post date, suppresses IndexError that could be thrown if tag isn't found"""
         try:
             date_and_url_tag = self.post_soup.findAll(self.date_and_url_query[0], self.date_and_url_query[1])[0]
         except IndexError:
-            raise ParserError(self.__class__.__name__, 'Parser index error')
+            raise ParserError(self.__class__.__name__, 'Parser index error', self.post_index)
         self.post_url = date_and_url_tag.attrs["href"]
         self.post_date = DataConverter.convert_time_lapse_to_date(date_and_url_tag.text)
 
@@ -132,7 +145,7 @@ class PostDataParser:
         try:
             user_tag = self.post_soup.findAll(self.username_query[0], self.username_query[1])[0]
         except IndexError:
-            raise ParserError(self.__class__.__name__, "User doesn't exist", self.post_url)
+            raise ParserError(self.__class__.__name__, "User doesn't exist", self.post_index, self.post_url)
         self.username = user_tag.text[2:]
         user_profile_link_old = "https://old.reddit.com" + user_tag.attrs["href"]
         user_profile_link_new = "https://www.reddit.com" + user_tag.attrs["href"]
@@ -142,7 +155,7 @@ class PostDataParser:
         page_text_soup = BeautifulSoup(user_page_text_old, features="html.parser")
         karma_tags = page_text_soup.findAll(self.post_and_comment_karma_query[0], self.post_and_comment_karma_query[1])
         if not karma_tags:
-            raise ParserError(self.__class__.__name__, "Page inaccessible to minors", self.post_url)
+            raise ParserError(self.__class__.__name__, "Page inaccessible to minors", self.post_index, self.post_url)
         page_text_soup = BeautifulSoup(user_page_text_new, features="html.parser")
         karma_and_cake_tags = page_text_soup.findAll(self.karma_and_cake_day_query[0], self.karma_and_cake_day_query[1])
         self.post_karma = int(karma_tags[0].text.replace(',', ''))
@@ -214,26 +227,25 @@ class PostsProcessor:
             return pg.get_posts()
 
     def establish_posts_data(self):
-        """Starts thread-team for parsing HTML format posts into dictionaries, which are added to a list.
+        """Starts thread-team for parsing HTML format posts into dictionaries, which will be added to posts list.
 
-        If the count of added posts is equal to needed, stop thread-team.
-        Logs Parser errors and information about finishing of sending requests.
+        If order and count of the posts meeting the criteria corresponds to needed, stop thread-team.
+        Logs the information about starting and finishing of sending requests.
         """
-        parsed_posts_data = []
-        with ThreadPoolExecutor() as executor:
-            futures = []
-            logging.info('Start sending requests')
-            for post in self.all_posts:
-                futures.append(executor.submit(PostDataParser(post).make_post_dict))
-            for future in futures:
-                if len(parsed_posts_data) == self.posts_count:
-                    break
-                try:
-                    parsed_posts_data.append(future.result())
-                except ParserError as err:
-                    logging.error(f'{err.text}, post URL: {err.post_url}')
-                    continue
-            logging.info('Stop sending requests')
+        posts_data = []
+        logging.info('Start sending requests')
+        for ind, post in enumerate(self.all_posts):
+            threading.Thread(target=PostDataParser(ind, post, posts_data).add_post_data_to_list, daemon=True).start()
+        start_timeout = self.posts_count // 5
+        time.sleep(start_timeout)
+        while True:
+            if posts_list_is_ready_check(posts_data, self.posts_count, len(self.all_posts)):
+                break
+            time.sleep(0.5)
+        logging.info('Stop sending requests')
+        parsed_posts_data = sorted(posts_data[::], key=lambda post_dict: post_dict['post']['post_index'])
+        [post_dict['post'].pop('post_index') for post_dict in parsed_posts_data]
+        parsed_posts_data = [post_dict for post_dict in parsed_posts_data if post_dict['post']][:self.posts_count]
         return parsed_posts_data
 
 
