@@ -75,6 +75,31 @@ class DataConverter:
         return config_dict
 
 
+def posts_list_is_ready_check(posts_list, needed_posts_count, stop_count):
+    """Checks whether order and count of the posts meeting the criteria corresponds to needed"""
+    if len(posts_list) == stop_count:
+        return True
+    posts_list_copy = posts_list.copy()
+    if len(posts_list) >= needed_posts_count:
+        posts_list_copy = sorted(posts_list_copy, key=lambda post_dict: post_dict['post_index'])
+        init_list_slice = posts_list_copy[:needed_posts_count]
+        right_posts_order = init_list_slice[len(init_list_slice) - 1]['post_index'] == needed_posts_count - 1
+        if right_posts_order:
+            unsuitable_posts_count = len([post_dict for post_dict in init_list_slice if len(post_dict) == 1])
+            if needed_posts_count + unsuitable_posts_count == len(init_list_slice):
+                return True
+            for post_dict_index in range(needed_posts_count, len(posts_list_copy)):
+                current_post_dict = posts_list_copy[post_dict_index]
+                right_posts_order = current_post_dict['post_index'] == post_dict_index
+                if right_posts_order:
+                    if len(current_post_dict) == 1:
+                        unsuitable_posts_count += 1
+                        continue
+                    further_list_slice = posts_list_copy[:post_dict_index + 1]
+                    if needed_posts_count + unsuitable_posts_count == len(further_list_slice):
+                        return True
+
+
 def define_connection_entries(default_connection_entries):
     """Defines connection entries under config file. If any of the entry isn't specified
 
@@ -90,7 +115,8 @@ def define_connection_entries(default_connection_entries):
 def get_html(url):
     """Sends a request to indicated URL and return server response text in HTML format.
 
-    In case ReadTimeout error, logs it, suspends execution of a program for some seconds, and send another request.
+    In case of ReadTimeout or Connection error, logs it, suspends execution of a program
+    for some seconds and sends another request.
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:45.0) Gecko/20100101 Firefox/45.0'
@@ -102,6 +128,9 @@ def get_html(url):
             request_succeed = True
         except requests.exceptions.ReadTimeout:
             logging.error(f'ReadTimeout, user URL: {url}')
+            time.sleep(1)
+        except requests.exceptions.ConnectionError:
+            logging.error(f'ConnectionError, user URL: {url}')
             time.sleep(1)
     response.encoding = 'utf8'
     return response.text
