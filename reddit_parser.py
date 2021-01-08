@@ -1,11 +1,10 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
-from utils import DataConverter, define_path_to_file, get_html, posts_list_is_ready_check
-import datetime
+from utils import convert_time_lapse_to_date, define_path_to_webdriver, get_html, posts_list_is_ready_check, \
+    produce_data_file
 import logging
 import math
-import os
 import time
 import threading
 import uuid
@@ -17,27 +16,31 @@ class PageLoader:
 
         to ensure a sufficient number of suitable posts in the final sample.
         """
-        self.post_divs_selector = 'div.rpBJOHq2PR60pnwJlUyP0 > div'
-        self.page_posts_count = math.ceil(posts_count * 1.5)
+        MULTIPLIER = 1.5
+        self.page_posts_count = math.ceil(posts_count * MULTIPLIER)
+        self.POST_DIVS_SELECTOR = 'div.rpBJOHq2PR60pnwJlUyP0 > div'
+        self.SCROLL_DOWN_SCRIPT = 'window.scrollTo(0, document.body.scrollHeight);'
 
     def __call__(self, driver):
         """Scrolls down the page unless loaded posts count is sufficient"""
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        post_divs_loaded = driver.find_elements_by_css_selector(self.post_divs_selector)
+
+        driver.execute_script(self.SCROLL_DOWN_SCRIPT)
+        post_divs_loaded = driver.find_elements_by_css_selector(self.POST_DIVS_SELECTOR)
         if len(post_divs_loaded) > self.page_posts_count:
             return True
-        else:
-            return
+        return False
 
 
 class PostsGetter:
     def __init__(self, url, posts_count):
         """Initializes Chrome webdriver, sets posts load waiting limit"""
-        self.driver = webdriver.Chrome(executable_path=self.define_path_to_webdriver())
+        self.driver = webdriver.Chrome(executable_path=define_path_to_webdriver())
         self.posts_query = ['div', {'class': '_1oQyIsiPHYt6nx7VOmd1sz'}]
+        self.TAG_INDEX = 0
+        self.CLASS_INDEX = 1
         self.url = url
         self.posts_count = posts_count
-        self.wait_seconds = 30
+        self.WAIT_SECONDS = 30
 
     def __enter__(self):
         """Opens suggested site in browser"""
@@ -49,13 +52,6 @@ class PostsGetter:
         self.driver.quit()
         return True
 
-    def define_path_to_webdriver(self):
-        """Defines path to Chrome webdriver under config file"""
-        config_dict = DataConverter.convert_data_from_yaml_to_dict()
-        path_from_config = config_dict.get('executable_path')
-        executable_path = path_from_config if path_from_config else 'chromedriver'
-        return executable_path
-
     def get_posts(self):
         """After waiting for the page to be loaded, finds all the posts presented on the page and
 
@@ -63,12 +59,14 @@ class PostsGetter:
         """
         all_posts = []
         try:
-            WebDriverWait(self.driver, self.wait_seconds).until(PageLoader(self.posts_count))
+            WebDriverWait(self.driver, self.WAIT_SECONDS).until(PageLoader(self.posts_count))
             page_text = self.driver.page_source
-            page_text_soup = BeautifulSoup(page_text, features="html.parser")
-            all_posts = page_text_soup.findAll(self.posts_query[0], self.posts_query[1])[:self.posts_count * 3]
+            PARSER_NAME = 'html.parser'
+            page_text_soup = BeautifulSoup(page_text, features=PARSER_NAME)
+            all_posts = page_text_soup.findAll(self.posts_query[self.TAG_INDEX], self.posts_query[self.CLASS_INDEX])
         finally:
-            return all_posts
+            MULTIPLIER = 3
+            return all_posts[:self.posts_count * MULTIPLIER]
 
 
 class ParserError(Exception):
@@ -93,6 +91,8 @@ class PostDataParser:
         self.post_and_comment_karma_query = ['span', {"class": "karma"}]
         self.votes_count_query = ['div', {"class": "_1rZYMD_4xY3gRcSS3p8ODO"}]
         self.username_query = ['a', {"class": "_2tbHP6ZydRpjI44J3syuqC"}]
+        self.TAG_INDEX = 0
+        self.CLASS_INDEX = 1
         self.post_index = post_index
         self.post = str(post)
         self.posts_list = posts_list
@@ -116,17 +116,22 @@ class PostDataParser:
                 self.post_dict[attr_name] = getattr(self, attr_name)
         except ParserError as err:
             logging.error(f'{err.text}, post URL: {err.post_url}')
-            self.post_dict = {'post_index': err.post_index}
+            POST_ORDER_INDEX_KEY = 'post_index'
+            self.post_dict = {POST_ORDER_INDEX_KEY: err.post_index}
         self.posts_list.append(self.post_dict)
 
     def define_url_date(self):
         """Defines post URL and post date, suppresses IndexError that could be thrown if tag isn't found"""
         try:
-            date_and_url_tag = self.post_soup.findAll(self.date_and_url_query[0], self.date_and_url_query[1])[0]
+            NEEDED_RESULT_INDEX = 0
+            date_and_url_tag = self.post_soup.findAll(self.date_and_url_query[self.TAG_INDEX],
+                                                      self.date_and_url_query[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
         except IndexError:
-            raise ParserError('Parser index error', self.post_index)
-        self.post_url = date_and_url_tag.attrs["href"]
-        self.post_date = DataConverter.convert_time_lapse_to_date(date_and_url_tag.text)
+            ERROR_TEXT = 'Parser index error'
+            raise ParserError(ERROR_TEXT, self.post_index)
+        ATTRIBUTE_NAME = 'href'
+        self.post_url = date_and_url_tag.attrs[ATTRIBUTE_NAME]
+        self.post_date = convert_time_lapse_to_date(date_and_url_tag.text)
 
     def define_username_karmas_cakeday(self):
         """Tries to find post creator at first. In case the user is deleted relevant exception is thrown.
@@ -136,82 +141,69 @@ class PostDataParser:
         If user's private page is inaccessible to minors, relevant exception is thrown.
         """
         try:
-            user_tag = self.post_soup.findAll(self.username_query[0], self.username_query[1])[0]
+            NEEDED_RESULT_INDEX = 0
+            user_tag = self.post_soup.findAll(self.username_query[self.TAG_INDEX],
+                                              self.username_query[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
         except IndexError:
-            raise ParserError("User doesn't exist", self.post_index, self.post_url)
-        self.username = user_tag.text[2:]
-        user_profile_link_old = "https://old.reddit.com" + user_tag.attrs["href"]
-        user_profile_link_new = "https://www.reddit.com" + user_tag.attrs["href"]
+            ERROR_TEXT = "User doesn't exist"
+            raise ParserError(ERROR_TEXT, self.post_index, self.post_url)
+        USERNAME_START_INDEX = 2
+        self.username = user_tag.text[USERNAME_START_INDEX:]
+        ATTRIBUTE_NAME = 'href'
+        OLD_URL_PREFIX = "https://old.reddit.com"
+        NEW_URL_PREFIX = "https://www.reddit.com"
+        user_profile_link_old = f'{OLD_URL_PREFIX}{user_tag.attrs[ATTRIBUTE_NAME]}'
+        user_profile_link_new = f'{NEW_URL_PREFIX}{user_tag.attrs[ATTRIBUTE_NAME]}'
         user_page_text_old = get_html(user_profile_link_old)
         user_page_text_new = get_html(user_profile_link_new)
-
-        page_text_soup = BeautifulSoup(user_page_text_old, features="html.parser")
-        karma_tags = page_text_soup.findAll(self.post_and_comment_karma_query[0], self.post_and_comment_karma_query[1])
+        PARSER_NAME = 'html.parser'
+        page_text_soup = BeautifulSoup(user_page_text_old, features=PARSER_NAME)
+        karma_tags = page_text_soup.findAll(self.post_and_comment_karma_query[self.TAG_INDEX],
+                                            self.post_and_comment_karma_query[self.CLASS_INDEX])
         if not karma_tags:
-            raise ParserError("Page inaccessible to minors", self.post_index, self.post_url)
-        page_text_soup = BeautifulSoup(user_page_text_new, features="html.parser")
-        karma_and_cake_tags = page_text_soup.findAll(self.karma_and_cake_day_query[0], self.karma_and_cake_day_query[1])
-        self.post_karma = karma_tags[0].text
-        self.comment_karma = karma_tags[1].text
-        self.user_karma = karma_and_cake_tags[0].text
-        self.user_cake_day = karma_and_cake_tags[1].text
+            ERROR_TEXT = 'Page inaccessible to minors'
+            raise ParserError(ERROR_TEXT, self.post_index, self.post_url)
+        page_text_soup = BeautifulSoup(user_page_text_new, features=PARSER_NAME)
+        karma_and_cake_tags = page_text_soup.findAll(self.karma_and_cake_day_query[self.TAG_INDEX],
+                                                     self.karma_and_cake_day_query[self.CLASS_INDEX])
+        POST_KARMA_INDEX = 0
+        COMMENT_KARMA_INDEX = 1
+        USER_KARMA_INDEX = 0
+        USER_CAKE_DAY_INDEX = 1
+        self.post_karma = karma_tags[POST_KARMA_INDEX].text
+        self.comment_karma = karma_tags[COMMENT_KARMA_INDEX].text
+        self.user_karma = karma_and_cake_tags[USER_KARMA_INDEX].text
+        self.user_cake_day = karma_and_cake_tags[USER_CAKE_DAY_INDEX].text
 
     def define_comments_count(self):
         """Defines number of comments. If initial query doesn't deliver a result, the second will be used for search."""
-        comments_count_tags = self.post_soup.findAll(self.comments_count_query1[0], self.comments_count_query1[1])
-        if comments_count_tags:
-            comments_count_tag = comments_count_tags[0]
-            self.comments_count = comments_count_tag.text
+        comments_tags = self.post_soup.findAll(self.comments_count_query1[self.TAG_INDEX],
+                                               self.comments_count_query1[self.CLASS_INDEX])
+        NEEDED_RESULT_INDEX = 0
+        if comments_tags:
+            comments_tag = comments_tags[NEEDED_RESULT_INDEX]
+            self.comments_count = comments_tag.text
         else:
-            comments_count_tag = self.post_soup.findAll(self.comments_count_query2[0], self.comments_count_query2[1])[0]
-            raw_text = comments_count_tag.text
+            comments_tag = self.post_soup.findAll(self.comments_count_query2[self.TAG_INDEX],
+                                                  self.comments_count_query2[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
+            raw_text = comments_tag.text
             space_index = raw_text.find(' ')
             self.comments_count = raw_text[:space_index]
 
     def define_votes_count(self):
         """Defines number of votes"""
-        votes_count_tag = self.post_soup.findAll(self.votes_count_query[0], self.votes_count_query[1])[1]
+        NEEDED_RESULT_INDEX = 1
+        votes_count_tag = self.post_soup.findAll(self.votes_count_query[self.TAG_INDEX],
+                                                 self.votes_count_query[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
         self.votes_count = votes_count_tag.text
 
     def define_category(self):
         """Defines post category"""
-        category_tag = self.post_soup.findAll(self.category_query[0], self.category_query[1])[1]
-        self.post_category = category_tag.text[2:]
-
-
-class FileWriter:
-    def __init__(self, post_data):
-        """Takes a list with collected data from all posts. Defines the path to output file,
-
-        writes stringified post data to it after having removed previous one if existing.
-        """
-        self.post_data = post_data
-        self.new_file_name = self.define_file_name('txt')
-        self.path_to_new_file = os.path.join(os.getcwd(), self.new_file_name)
-        self.remove_old_file()
-        self.write_data_to_new_file()
-
-    def write_data_to_new_file(self):
-        """Writes post data stringified from dictionary to the new file"""
-        with open(self.path_to_new_file, 'w') as file:
-            for ind, post_dict in enumerate(self.post_data):
-                post_data_str = DataConverter.make_str_from_dict(post_dict)
-                if ind != len(self.post_data) - 1:
-                    post_data_str += '\n'
-                file.write(post_data_str)
-
-    def remove_old_file(self):
-        """Removes no longer needed post data file if existing"""
-        path_to_old_file = define_path_to_file('reddit-')
-        if path_to_old_file:
-            os.remove(path_to_old_file)
-
-    def define_file_name(self, file_format):
-        """Defines the name of output file based on the file format and current time"""
-        datetime_now = datetime.datetime.now()
-        datetime_str = datetime_now.strftime("%Y%m%d%H%M")
-        file_name = f'reddit-{datetime_str}.{file_format}'
-        return file_name
+        NEEDED_RESULT_INDEX = 1
+        category_tag = self.post_soup.findAll(self.category_query[self.TAG_INDEX],
+                                              self.category_query[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
+        POST_CATEGORY_START_INDEX = 2
+        self.post_category = category_tag.text[POST_CATEGORY_START_INDEX:]
 
 
 class PostsProcessor:
@@ -228,14 +220,12 @@ class PostsProcessor:
         self.all_posts = self.get_posts_list(self.url, self.posts_count)
         logging.info('Stop running Chrome webdriver')
         self.parsed_posts_data = self.establish_post_data()
-        FileWriter(self.parsed_posts_data)
+        produce_data_file(self.parsed_posts_data)
 
     def get_posts_list(self, url, posts_count):
-        """Tries to find posts on indicated URL in the amount by a factor
+        """Tries to find posts on indicated URL in a certain amount exceeding required to be written to the file.
 
-        of 1.5 times exceeding required to be written to the file.
-        Does basic configuration for the logging system,
-        logs information about starting of running Chrome webdriver.
+        Does basic configuration for the logging system, logs information about starting of running Chrome webdriver.
         """
         logging.basicConfig(filename="parserLogs.log", level=logging.INFO,
                             format='%(asctime)s. %(levelname)s: %(message)s')
@@ -253,15 +243,19 @@ class PostsProcessor:
         logging.info('Start sending requests')
         for ind, post in enumerate(self.all_posts):
             threading.Thread(target=PostDataParser(ind, post, posts_data).add_post_data_to_list, daemon=True).start()
-        start_timeout = self.posts_count // 5
-        time.sleep(start_timeout)
+        MULTIPLIER = 0.2
+        wait_before_start_check_seconds = self.posts_count * MULTIPLIER
+        time.sleep(wait_before_start_check_seconds)
+        WAIT_NEXT_CHECK_SECONDS = 0.5
         while True:
             if posts_list_is_ready_check(posts_data, self.posts_count, len(self.all_posts)):
                 break
-            time.sleep(0.5)
+            time.sleep(WAIT_NEXT_CHECK_SECONDS)
         logging.info('Stop sending requests')
-        parsed_posts_data = sorted(posts_data[::], key=lambda post_dict: post_dict['post_index'])
-        [post_dict.pop('post_index') for post_dict in parsed_posts_data]
+        POST_ORDER_INDEX_KEY = 'post_index'
+        parsed_posts_data = sorted(posts_data[::], key=lambda post_dict: post_dict[POST_ORDER_INDEX_KEY])
+        for post_dict in parsed_posts_data:
+            del post_dict[POST_ORDER_INDEX_KEY]
         parsed_posts_data = [post_dict for post_dict in parsed_posts_data if post_dict][:self.posts_count]
         return parsed_posts_data
 
