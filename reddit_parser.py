@@ -227,7 +227,7 @@ class PostsProcessor:
 
         Does basic configuration for the logging system, logs information about starting of running Chrome webdriver.
         """
-        logging.basicConfig(filename="parserLogs.log", level=logging.INFO,
+        logging.basicConfig(filename="programLogs.log", level=logging.INFO,
                             format='%(asctime)s. %(levelname)s: %(message)s')
         logging.info('Start running Chrome webdriver')
         with PostsGetter(url, posts_count) as pg:
