@@ -1,7 +1,7 @@
-from utils import define_connection_entries
 import logging
 import os
 import psycopg2
+import utils
 
 
 class PostgreExecutorError(Exception):
@@ -102,14 +102,14 @@ class PostgreQueryCollection:
                         comment_karma = %(comment_karma)s
                     where id = (select user_id from upd_post) 
                         """
-    test_mode_identifier_filename = 'test_mode.txt'
+    TEST_MODE_IDENTIFIER_FILENAME = 'test_mode.txt'
 
     def __init__(self):
         """Checks whether there is a file indicating that unittests are have been running at the moment.
 
         If true, replaces queries.
         """
-        test_mode = os.path.exists(self.test_mode_identifier_filename)
+        test_mode = os.path.exists(os.path.join(os.path.dirname(__file__), self.TEST_MODE_IDENTIFIER_FILENAME))
         if test_mode:
             self.replace_queries()
 
@@ -117,7 +117,12 @@ class PostgreQueryCollection:
         """Changes real table names used for database queries to the test instead"""
         for attr in dir(self):
             if not callable(getattr(self, attr)) and not attr.startswith("__"):
-                new_value = getattr(self, attr).replace('users', 'test_users').replace('posts', 'test_posts')
+                USERS_WORKSHEET = 'users'
+                USERS_TESTSHEET = 'test_users'
+                POSTS_WORKSHEET = 'posts'
+                POSTS_TESTSHEET = 'test_posts'
+                new_value = getattr(self, attr).replace(USERS_WORKSHEET, USERS_TESTSHEET)\
+                    .replace(POSTS_WORKSHEET, POSTS_TESTSHEET)
                 setattr(self, attr, new_value)
 
 
@@ -148,7 +153,7 @@ class PostgreConnector:
 
     def connect_to_db(self):
         """Creates a new database connection with certain connection parameters"""
-        connection = psycopg2.connect(**define_connection_entries(self.connection_entries))
+        connection = psycopg2.connect(**utils.define_connection_entries(self.connection_entries))
         return connection
 
 
@@ -193,7 +198,8 @@ class PostgreAllPostsGetter(PostgreConnector):
             stored_posts = self.cursor.fetchall()
             return stored_posts
         except psycopg2.errors.UndefinedTable:
-            raise PostgreExecutorError(self.__class__.__name__, "Table doesn't exist")
+            ERROR_TEXT = "Table doesn't exist"
+            raise PostgreExecutorError(self.__class__.__name__, ERROR_TEXT)
 
 
 class PostgrePostGetter(PostgreConnector):
@@ -211,11 +217,13 @@ class PostgrePostGetter(PostgreConnector):
             self.cursor.execute(PostgreQueryCollection().get_post_query, self.unique_id)
             result = self.cursor.fetchall()
             if result:
-                stored_post = result[0]
+                NEEDED_RESULT_INDEX = 0
+                stored_post = result[NEEDED_RESULT_INDEX]
                 return stored_post
             return
         except psycopg2.errors.UndefinedTable:
-            raise PostgreExecutorError(self.__class__.__name__, "Table doesn't exist")
+            ERROR_TEXT = "Table doesn't exist"
+            raise PostgreExecutorError(self.__class__.__name__, ERROR_TEXT)
 
 
 class PostgrePostRemover(PostgreConnector):
@@ -233,7 +241,8 @@ class PostgrePostRemover(PostgreConnector):
             self.cursor.execute(PostgreQueryCollection().remove_post_query, self.unique_id)
             return self.cursor.rowcount
         except psycopg2.errors.UndefinedTable:
-            raise PostgreExecutorError(self.__class__.__name__, "Table doesn't exist")
+            ERROR_TEXT = "Table doesn't exist"
+            raise PostgreExecutorError(self.__class__.__name__, ERROR_TEXT)
 
 
 class PostgrePostInserter(PostgrePostGetter):

@@ -1,7 +1,6 @@
-from reddit_parser import PostsProcessor
-from postgre import PostgreAllPostsGetter, PostgreExecutorError, PostgrePostGetter, PostgrePostInserter, \
-    PostgrePostRemover, PostgrePostUpdater
-from utils import DataConverter
+import postgre
+import reddit_parser
+import utils
 import json
 import logging
 
@@ -13,16 +12,18 @@ def get_posts():
     If generated list isn't empty, returns it in JSON format
     with status code 200. In all other cases, status code 404 is only returned.
     """
-    with PostgreAllPostsGetter() as posts_getter:
+    with postgre.PostgreAllPostsGetter() as posts_getter:
         stored_posts = []
         try:
             stored_posts = posts_getter.get_all_posts_from_db()
-        except PostgreExecutorError as err:
+        except postgre.PostgreExecutorError as err:
             logging.error(f'{err.thrown_by}: {err.text}')
-    if stored_posts:
-        posts = [DataConverter.make_dict_from_tuple(tup) for tup in stored_posts]
-        return {'status_code': 200, 'content': json.dumps(posts)}
-    return {'status_code': 404}
+    if not stored_posts:
+        NOT_FOUND = 404
+        return {'status_code': NOT_FOUND}
+    posts = [utils.make_dict_from_tuple(tup) for tup in stored_posts]
+    OK = 200
+    return {'status_code': OK, 'content': json.dumps(posts)}
 
 
 def get_post(unique_id):
@@ -31,16 +32,18 @@ def get_post(unique_id):
     If Executor error was thrown, logs it. If post was found, returns generated dictionary in JSON format
     with status code 200. In all other cases, status code 404 is only returned.
     """
-    with PostgrePostGetter(unique_id) as post_getter:
+    with postgre.PostgrePostGetter(unique_id) as post_getter:
         stored_post = ()
         try:
             stored_post = post_getter.get_post_from_db()
-        except PostgreExecutorError as err:
+        except postgre.PostgreExecutorError as err:
             logging.error(f'{err.thrown_by}: {err.text}')
-    if stored_post:
-        post = DataConverter.make_dict_from_tuple(stored_post)
-        return {'status_code': 200, 'content': json.dumps(post)}
-    return {'status_code': 404}
+    if not stored_post:
+        NOT_FOUND = 404
+        return {'status_code': NOT_FOUND}
+    post = utils.make_dict_from_tuple(stored_post)
+    OK = 200
+    return {'status_code': OK, 'content': json.dumps(post)}
 
 
 def add_post(post_dict):
@@ -51,18 +54,23 @@ def add_post(post_dict):
     Status code is 409, if equal post data already exists in a database or it's 404 in another unsuccessful instances.
     """
     post_dict = json.loads(post_dict)
-    unique_id = post_dict.get('unique_id')
-    status_code = 404
-    stored_post_number = 0
-    if len(post_dict) == 11 and unique_id and len(unique_id) == 32:
-        post_dict = DataConverter.convert_date(post_dict, 'month')
+    UNIQUE_ID_KEY = 'unique_id'
+    unique_id = post_dict.get(UNIQUE_ID_KEY)
+    NOT_FOUND = 404
+    CORRECT_POST_ENTITIES_COUNT = 11
+    CORRECT_ID_LENGTH = 32
+    if len(post_dict) != CORRECT_POST_ENTITIES_COUNT or not unique_id or len(unique_id) != CORRECT_ID_LENGTH:
+        return {'status_code': NOT_FOUND}
+    DATE_BEGINS_FROM_MONTH = 'month'
+    post_dict = utils.convert_date(post_dict, DATE_BEGINS_FROM_MONTH)
+    while True:
         status_code, stored_post_number = insert_post(unique_id, post_dict)
-        if not status_code:
-            status_code, stored_post_number = insert_post(unique_id, post_dict)
-    if not status_code == 201:
-        return {'status_code': status_code}
-    content = json.dumps({'UNIQUE_ID': stored_post_number})
-    return {'status_code': status_code, 'content': content}
+        if status_code:
+            break
+    if status_code == 201:
+        content = json.dumps({'UNIQUE_ID': stored_post_number})
+        return {'status_code': status_code, 'content': content}
+    return {'status_code': status_code}
 
 
 def del_post(unique_id):
@@ -72,16 +80,17 @@ def del_post(unique_id):
     In all other cases, status code 404 is returned.
     Logs Executor error, if it was thrown.
     """
-    status_code = 404
-    with PostgrePostRemover(unique_id) as post_remover:
+    with postgre.PostgrePostRemover(unique_id) as post_remover:
         deleted_post_number = 0
         try:
             deleted_post_number = post_remover.remove_post_from_db()
-        except PostgreExecutorError as err:
+        except postgre.PostgreExecutorError as err:
             logging.error(f'{err.thrown_by}: {err.text}')
     if deleted_post_number:
-        status_code = 200
-    return {'status_code': status_code}
+        OK = 200
+        return {'status_code': OK}
+    NOT_FOUND = 404
+    return {'status_code': NOT_FOUND}
 
 
 def update_post(unique_id, post_dict):
@@ -95,30 +104,37 @@ def update_post(unique_id, post_dict):
     Logs Executor error, if it was thrown.
     """
     post_dict = json.loads(post_dict)
-    post_dict_unique_id = post_dict.get('unique_id')
+    UNIQUE_ID_KEY = 'unique_id'
+    post_dict_unique_id = post_dict.get(UNIQUE_ID_KEY)
     provided_id_match = True
     if post_dict_unique_id:
         provided_id_match = post_dict_unique_id == unique_id
     else:
-        post_dict['unique_id'] = unique_id
-    status_code = 404
-    if len(post_dict) == 11 and unique_id and len(unique_id) == 32 and provided_id_match:
-        post_dict_with_zero = DataConverter.convert_date(post_dict.copy(), 'zero')
-        post_dict = DataConverter.convert_date(post_dict, 'month')
-        with PostgrePostUpdater(unique_id, post_dict) as post_updater:
-            stored_post = ()
-            try:
-                stored_post = post_updater.get_post_from_db()
-            except PostgreExecutorError as err:
-                logging.error(f'{err.thrown_by}: {err.text}')
-            if stored_post:
-                stored_post_dict = DataConverter.make_dict_from_tuple(stored_post)
-                if post_dict_with_zero == stored_post_dict:
-                    status_code = 409
-                else:
-                    post_updater.update_post()
-                    status_code = 200
-    return {'status_code': status_code}
+        post_dict[UNIQUE_ID_KEY] = unique_id
+    NOT_FOUND = 404
+    CORRECT_POST_ENTITIES_COUNT = 11
+    CORRECT_ID_LENGTH = 32
+    if len(post_dict) != CORRECT_POST_ENTITIES_COUNT or not provided_id_match or len(unique_id) != CORRECT_ID_LENGTH:
+        return {'status_code': NOT_FOUND}
+    DATE_WITH_ZERO = 'zero'
+    post_dict_with_renewed_date = utils.convert_date(post_dict.copy(), DATE_WITH_ZERO)
+    DATE_BEGINS_FROM_MONTH = 'month'
+    post_dict = utils.convert_date(post_dict, DATE_BEGINS_FROM_MONTH)
+    with postgre.PostgrePostUpdater(unique_id, post_dict) as post_updater:
+        stored_post = ()
+        try:
+            stored_post = post_updater.get_post_from_db()
+        except postgre.PostgreExecutorError as err:
+            logging.error(f'{err.thrown_by}: {err.text}')
+        if not stored_post:
+            return {'status_code': NOT_FOUND}
+        stored_post_dict = utils.make_dict_from_tuple(stored_post)
+        if post_dict_with_renewed_date == stored_post_dict:
+            CONFLICT = 409
+            return {'status_code': CONFLICT}
+        post_updater.update_post()
+        OK = 200
+        return {'status_code': OK}
 
 
 def insert_post(unique_id, post_dict):
@@ -132,19 +148,25 @@ def insert_post(unique_id, post_dict):
     on condition that current number of database records does not exceed 1000.
     In the present case, status code 201 and the number of stored posts are returned.
     """
-    status_code, stored_post_number = 404, 0
-    with PostgrePostInserter(unique_id, post_dict) as post_inserter:
+    with postgre.PostgrePostInserter(unique_id, post_dict) as post_inserter:
         try:
             stored_post = post_inserter.get_post_from_db()
-        except PostgreExecutorError as err:
+        except postgre.PostgreExecutorError as err:
             logging.error(f'{err.thrown_by}: {err.text}')
-            PostsProcessor("https://www.reddit.com/top/?t=month", 100)
-            return None, None
+            NEEDED_POSTS_NUMBER = 100
+            REDDIT_URL = "https://www.reddit.com/top/?t=month"
+            reddit_parser.PostsProcessor(REDDIT_URL, NEEDED_POSTS_NUMBER)
+            return False, False
         if stored_post:
-            status_code = 409
-        else:
-            stored_post_number = post_inserter.define_stored_post_number()
-            if stored_post_number < 1000:
-                post_inserter.insert_post_into_db()
-                status_code = 201
-    return status_code, stored_post_number + 1
+            CONFLICT = 409
+            status_code = CONFLICT
+            return status_code, False
+        stored_post_number = post_inserter.define_stored_post_number()
+        if stored_post_number >= 1000:
+            NOT_FOUND = 404
+            status_code = NOT_FOUND
+            return status_code, False
+        post_inserter.insert_post_into_db()
+        CREATED = 201
+        status_code = CREATED
+        return status_code, stored_post_number + 1

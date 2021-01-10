@@ -1,12 +1,11 @@
-from postgre import PostgreAllPostsInserter, PostgreTablesCreator, PostgreTablesRemover, PostgreTablesTruncator, \
-    PostgreQueryCollection
 import json
-import os
+import postgre
 import requests
 import unittest
+import utils
 
 
-class PostDataCollection:
+class TestDataCollection:
     """Contains posts data that will be used in unittests"""
     init_post_dict_1 = {'username': 'PrettyCoolTim', 'user_karma': 312355, 'user_cake_day': '08.07.2020',
                         'post_karma': 200743, 'comment_karma': 3974, 'unique_id': '582ef18c485c11ebb1f1c9ee1740fa9b',
@@ -49,224 +48,222 @@ class PostDataCollection:
                         'post_url': 'https://www.reddit.com/r/memes/comments/khiyao/uncanny_resemblance/',
                         'post_date': '12.21.2020', 'comments_number': 495, 'votes_number': 190000,
                         'post_category': 'memes'}
-
-
-class EnvironmentModifier:
-    def prepare_test_environment(self):
-        """Creates a file indicating that unittests are have been running at the moment.
-
-        Creates 2 related test tables in a database, inserts certain test post data to the tables.
-        """
-        with open(PostgreQueryCollection.test_mode_identifier_filename, 'w') as file:
-            file.write('')
-        with PostgreTablesCreator() as tables_creator:
-            tables_creator.create_tables()
-        with PostgreAllPostsInserter(PostDataCollection.init_posts_data) as post_inserter:
-            post_inserter.insert_all_posts_into_db()
-
-    def restore_pre_test_state(self):
-        """Restores pre-test state of the directory and database. Removes 2 related test tables
-
-        from a database, deletes a file indicating that unittests are have been running at the moment.
-        """
-        with PostgreTablesRemover() as tables_remover:
-            tables_remover.remove_tables()
-        os.remove(PostgreQueryCollection.test_mode_identifier_filename)
+    WAIT_RESPONSE_SECONDS = 5
+    OK = 200
+    CREATED = 201
+    CONFLICT = 409
+    NOT_FOUND = 404
+    URL_WITHOUT_ID = "http://localhost:8087/posts/"
+    URL_WITH_EXISTENT_ID = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
+    URL_WITH_NONEXISTENT_ID = "http://localhost:8087/posts/002ef18c485c11ebb1f1c9ee1740fa9b/"
+    INVALID_URL = "http://localhost:8087/posts/invalid/"
 
 
 class ReorganizerMixin:
     def setUp(self):
         """Defines setUp behavior for unittests. Calls the function that prepares test environment"""
-        EnvironmentModifier().prepare_test_environment()
+        utils.prepare_test_environment()
 
     def tearDown(self):
         """Defines tearDown behavior for unittests.
 
         Calls the function that restores pre-test state of the directory and database.
         """
-        EnvironmentModifier().restore_pre_test_state()
+        utils.restore_pre_test_state()
 
 
 class TestGET(ReorganizerMixin, unittest.TestCase):
     def test_get_posts_success(self):
         print('testing get_posts success')
-        req = requests.get("http://localhost:8087/posts/", timeout=5)
-        self.assertEqual((req.status_code, req.json()), (200, PostDataCollection.posts_data))
+        req = requests.get(TestDataCollection.URL_WITHOUT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.json()), (TestDataCollection.OK, TestDataCollection.posts_data))
 
     def test_get_posts_no_table(self):
         print('testing get_posts with no table found')
-        with PostgreTablesRemover() as tables_remover:
+        with postgre.PostgreTablesRemover() as tables_remover:
             tables_remover.remove_tables()
-        req = requests.get("http://localhost:8087/posts/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.get(TestDataCollection.URL_WITHOUT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_get_posts_empty_table(self):
         print('testing get_posts with empty table')
-        with PostgreTablesTruncator() as tables_truncator:
+        with postgre.PostgreTablesTruncator() as tables_truncator:
             tables_truncator.truncate_tables()
-        req = requests.get("http://localhost:8087/posts/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.get(TestDataCollection.URL_WITHOUT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_get_post_success(self):
         print('testing get_post success')
-        req = requests.get("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.json()), (200, PostDataCollection.post_dict_1))
+        req = requests.get(TestDataCollection.URL_WITH_EXISTENT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.json()), (TestDataCollection.OK, TestDataCollection.post_dict_1))
 
     def test_get_post_no_table(self):
         print('testing get_post with no table found')
-        with PostgreTablesRemover() as tables_remover:
+        with postgre.PostgreTablesRemover() as tables_remover:
             tables_remover.remove_tables()
-        req = requests.get("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.get(TestDataCollection.URL_WITH_NONEXISTENT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_get_post_empty_table(self):
         print('testing get_post with empty table')
-        with PostgreTablesTruncator() as tables_truncator:
+        with postgre.PostgreTablesTruncator() as tables_truncator:
             tables_truncator.truncate_tables()
-        req = requests.get("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.get(TestDataCollection.URL_WITH_NONEXISTENT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_get_post_not_found(self):
         print('testing get_post not found')
-        req = requests.get("http://localhost:8087/posts/002ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.get(TestDataCollection.URL_WITH_NONEXISTENT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_get_url_not_valid(self):
         print('testing get_url is not valid')
-        req = requests.get("http://localhost:8087/posts/0582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.get(TestDataCollection.INVALID_URL, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
 
 class TestPOST(ReorganizerMixin, unittest.TestCase):
     def test_add_post_success(self):
         print('testing add_post success')
-        post_data = PostDataCollection.nonexistent_post_dict
+        post_data = TestDataCollection.nonexistent_post_dict
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/posts/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.json()), (201, {'UNIQUE_ID': 4}))
+        req = requests.post(TestDataCollection.URL_WITHOUT_ID, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        INSERTED_ROW_NUMBER = 4
+        self.assertEqual((req.status_code, req.json()),
+                         (TestDataCollection.CREATED, {'UNIQUE_ID': INSERTED_ROW_NUMBER}))
 
     def test_add_post_empty_table(self):
         print('testing add_post with empty table')
-        with PostgreTablesTruncator() as tables_truncator:
+        with postgre.PostgreTablesTruncator() as tables_truncator:
             tables_truncator.truncate_tables()
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/posts/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.json()), (201, {'UNIQUE_ID': 1}))
+        req = requests.post(TestDataCollection.URL_WITHOUT_ID, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        INSERTED_ROW_NUMBER = 1
+        self.assertEqual((req.status_code, req.json()),
+                         (TestDataCollection.CREATED, {'UNIQUE_ID': INSERTED_ROW_NUMBER}))
 
     def test_add_post_duplicate(self):
         print('testing add_post with duplicate')
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/posts/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.content), (409, b''))
+        req = requests.post(TestDataCollection.URL_WITHOUT_ID, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.CONFLICT, b''))
 
     def test_add_post_incorrect_post_dict(self):
         print('testing add_post with incorrect post dict')
-        post_data = PostDataCollection.incorrect_post_dict
+        post_data = TestDataCollection.incorrect_post_dict
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/posts/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.post(TestDataCollection.URL_WITHOUT_ID, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_post_url_not_valid(self):
         print('testing post_url is not valid')
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/postsinvalid/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.post(TestDataCollection.INVALID_URL, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
 
 class TestDELETE(ReorganizerMixin, unittest.TestCase):
     def test_del_post_success(self):
         print('testing del_post success')
-        req = requests.delete("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual(req.status_code, 200)
+        req = requests.delete(TestDataCollection.URL_WITH_EXISTENT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.OK)
 
     def test_del_post_no_table(self):
         print('testing del_post with no table found')
-        with PostgreTablesRemover() as tables_remover:
+        with postgre.PostgreTablesRemover() as tables_remover:
             tables_remover.remove_tables()
-        req = requests.delete("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.delete(TestDataCollection.URL_WITH_NONEXISTENT_ID,
+                              timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_del_post_empty_table(self):
         print('testing del_post with empty table')
-        with PostgreTablesTruncator() as tables_truncator:
+        with postgre.PostgreTablesTruncator() as tables_truncator:
             tables_truncator.truncate_tables()
-        req = requests.delete("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.delete(TestDataCollection.URL_WITH_NONEXISTENT_ID,
+                              timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_del_post_not_found(self):
         print('testing del_post not found')
-        req = requests.delete("http://localhost:8087/posts/002ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.delete(TestDataCollection.URL_WITH_NONEXISTENT_ID,
+                              timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_delete_url_not_valid(self):
         print('testing delete_url is not valid')
-        req = requests.delete("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/del", timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.delete(TestDataCollection.INVALID_URL, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
 
 class TestPUT(ReorganizerMixin, unittest.TestCase):
     def test_update_post_success(self):
         print('testing update_post success')
-        post_data = PostDataCollection.update_post_dict
+        post_data = TestDataCollection.update_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 200)
+        req = requests.put(TestDataCollection.URL_WITH_EXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.OK)
 
     def test_update_post_no_table(self):
         print('testing update_post with no table found')
-        with PostgreTablesRemover() as tables_remover:
+        with postgre.PostgreTablesRemover() as tables_remover:
             tables_remover.remove_tables()
-        post_data = PostDataCollection.update_post_dict
+        post_data = TestDataCollection.update_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.URL_WITH_NONEXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_update_post_empty_table(self):
         print('testing update_post with empty table')
-        with PostgreTablesTruncator() as tables_truncator:
+        with postgre.PostgreTablesTruncator() as tables_truncator:
             tables_truncator.truncate_tables()
-        post_data = PostDataCollection.update_post_dict
+        post_data = TestDataCollection.update_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.URL_WITH_NONEXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_update_post_duplicate(self):
         print('testing update_post with duplicate')
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 409)
+        req = requests.put(TestDataCollection.URL_WITH_EXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.CONFLICT)
 
     def test_update_post_incorrect_put_data(self):
         print('testing update_post with incorrect data')
-        post_data = PostDataCollection.incorrect_post_dict
+        post_data = TestDataCollection.incorrect_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.URL_WITH_EXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_update_post_not_found(self):
         print('testing update_post not found')
-        post_data = PostDataCollection.nonexistent_post_dict
+        post_data = TestDataCollection.nonexistent_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.URL_WITH_NONEXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_put_url_not_valid(self):
         print('testing put_url is not valid')
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/bug582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.INVALID_URL, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
 
 if __name__ == "__main__":
