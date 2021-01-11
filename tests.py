@@ -266,5 +266,114 @@ class TestPUT(ReorganizerMixin, unittest.TestCase):
         self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
 
+class TestListGeneratedByThreads(unittest.TestCase):
+    def test_ordered_list(self):
+        print('testing utils.posts_list_is_ready_check using ordered list')
+        ordered_posts_list = [
+            {'post_index': 0, 'another_key': ''},
+            {'post_index': 1},
+            {'post_index': 2},
+            {'post_index': 3, 'another_key': ''},
+            {'post_index': 4},
+            {'post_index': 5, 'another_key': ''},
+        ]
+        UNREACHABLE_NUMBER = 10
+        stop_count = UNREACHABLE_NUMBER
+
+        sliced_posts_list = ordered_posts_list[:0]
+        needed_posts_count = 0
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        needed_posts_count = 1
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:1]
+        needed_posts_count = 1
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:2]
+        needed_posts_count = 1
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:3]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:4]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:5]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:]
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+    def test_unordered_list(self):
+        print('testing utils.posts_list_is_ready_check using unordered list')
+        unordered_posts_list = [
+            {'post_index': 0, 'another_key': ''},
+            {'post_index': 1, 'another_key': ''},
+            {'post_index': 3, 'another_key': ''},
+            {'post_index': 4, 'another_key': ''},
+        ]
+        UNREACHABLE_NUMBER = 10
+        stop_count = UNREACHABLE_NUMBER
+
+        sliced_posts_list = unordered_posts_list[:1]
+        needed_posts_count = 1
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        sliced_posts_list = unordered_posts_list[:2]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        sliced_posts_list = unordered_posts_list[:3]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = unordered_posts_list[:4]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+
 if __name__ == "__main__":
     unittest.main()
