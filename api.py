@@ -1,5 +1,5 @@
-from mongo import MongoExecutor
-from reddit_parser import PostsProcessor
+import mongo
+import reddit_parser
 import json
 
 
@@ -8,10 +8,12 @@ def get_posts():
 
     and a list with found posts in JSON format. In all other cases, status code 404 is only returned.
     """
-    stored_posts = MongoExecutor().get_all_posts_from_db()
+    stored_posts = mongo.MongoExecutor().get_all_posts_from_db()
     if stored_posts:
-        return {'status_code': 200, 'content': json.dumps(stored_posts)}
-    return {'status_code': 404}
+        OK = 200
+        return {'status_code': OK, 'content': json.dumps(stored_posts)}
+    NOT_FOUND = 404
+    return {'status_code': NOT_FOUND}
 
 
 def get_post(unique_id):
@@ -19,10 +21,12 @@ def get_post(unique_id):
 
     If post was found, returns status code 200 and a dictionary with post data in JSON format.
     In all other cases, status code 404 is only returned """
-    stored_post = MongoExecutor(unique_id=unique_id).get_post_from_db()
+    stored_post = mongo.MongoExecutor(unique_id=unique_id).get_post_from_db()
     if stored_post:
-        return {'status_code': 200, 'content': json.dumps(stored_post)}
-    return {'status_code': 404}
+        OK = 200
+        return {'status_code': OK, 'content': json.dumps(stored_post)}
+    NOT_FOUND = 404
+    return {'status_code': NOT_FOUND}
 
 
 def add_post(post_dict):
@@ -34,25 +38,34 @@ def add_post(post_dict):
     In all other cases, including current number of database records, exceeding 999, status code takes the value 404.
     """
     post_dict = json.loads(post_dict)
-    post_unique_id = post_dict.get('post', {}).get('unique_id')
-    user_unique_id = post_dict.get('user', {}).get('post_unique_id')
-    stored_posts_number = 0
-    status_code = 404
-    if len(post_dict) == 2 and post_unique_id and len(post_unique_id) == 32 and post_unique_id == user_unique_id:
-        mongo_executor = MongoExecutor(unique_id=post_unique_id)
+    POST_ENTITIES_KEY = 'post'
+    POST_DOC_UNIQUE_ID_KEY = 'unique_id'
+    post_unique_id = post_dict.get(POST_ENTITIES_KEY, {}).get(POST_DOC_UNIQUE_ID_KEY, '')
+    USER_ENTITIES_KEY = 'user'
+    USER_DOC_RELATED_POST_UNIQUE_ID_KEY = 'post_unique_id'
+    user_unique_id = post_dict.get(USER_ENTITIES_KEY, {}).get(USER_DOC_RELATED_POST_UNIQUE_ID_KEY, '')
+    NOT_FOUND = 404
+    CORRECT_DOC_COUNT = 2
+    CORRECT_ID_LEN = 32
+    if len(post_dict) != CORRECT_DOC_COUNT or len(post_unique_id) != CORRECT_ID_LEN or post_unique_id != user_unique_id:
+        return {'status_code': NOT_FOUND}
+    mongo_executor = mongo.MongoExecutor(unique_id=post_unique_id)
+    stored_posts_number = mongo_executor.define_stored_posts_number()
+    if not stored_posts_number:
+        NEEDED_POSTS_NUMBER = 100
+        REDDIT_URL = "https://www.reddit.com/top/?t=month"
+        reddit_parser.PostsProcessor(REDDIT_URL, NEEDED_POSTS_NUMBER)
         stored_posts_number = mongo_executor.define_stored_posts_number()
-        if not stored_posts_number:
-            PostsProcessor("https://www.reddit.com/top/?t=month", 100)
-            stored_posts_number = mongo_executor.define_stored_posts_number()
-        if mongo_executor.get_post_data_from_db():
-            status_code = 409
-        elif stored_posts_number < 1000:
-            mongo_executor.insert_post_into_db(post_dict)
-            status_code = 201
-    if not status_code == 201:
-        return {'status_code': status_code}
-    content = json.dumps({'UNIQUE_ID': stored_posts_number + 1})
-    return {'status_code': status_code, 'content': content}
+    if mongo_executor.get_post_data_from_db():
+        CONFLICT = 409
+        return {'status_code': CONFLICT}
+    MAX_STORED_POSTS_NUMBER = 1000
+    if stored_posts_number < MAX_STORED_POSTS_NUMBER:
+        mongo_executor.insert_post_into_db(post_dict)
+        CREATED = 201
+        content = json.dumps({'UNIQUE_ID': stored_posts_number + 1})
+        return {'status_code': CREATED, 'content': content}
+    return {'status_code': NOT_FOUND}
 
 
 def del_post(unique_id):
@@ -60,11 +73,13 @@ def del_post(unique_id):
 
     deleted, returns status code 200. In all other cases, status code 404 is returned.
     """
-    status_code = 404
-    deleted_documents_count = MongoExecutor(unique_id=unique_id).delete_post()
-    if deleted_documents_count == 2:
-        status_code = 200
-    return {'status_code': status_code}
+    deleted_documents_count = mongo.MongoExecutor(unique_id=unique_id).delete_post()
+    NEEDED_NUMBER_FOR_REMOVAL = 2
+    if deleted_documents_count == NEEDED_NUMBER_FOR_REMOVAL:
+        OK = 200
+        return {'status_code': OK}
+    NOT_FOUND = 404
+    return {'status_code': NOT_FOUND}
 
 
 def update_post(unique_id, post_dict):
@@ -77,16 +92,24 @@ def update_post(unique_id, post_dict):
     In all other cases, status code 404 is returned.
     """
     post_dict = json.loads(post_dict)
-    post_dict.get('post', {})['unique_id'] = unique_id
-    post_dict.get('user', {})['post_unique_id'] = unique_id
-    status_code = 404
-    if len(post_dict) == 2 and unique_id and len(unique_id) == 32:
-        mongo_executor = MongoExecutor(unique_id=unique_id)
-        stored_post_dict = mongo_executor.get_post_from_db()
-        if stored_post_dict:
-            if stored_post_dict == post_dict:
-                status_code = 409
-            else:
-                mongo_executor.update_post(post_dict)
-                status_code = 200
-    return {'status_code': status_code}
+    POST_ENTITIES_KEY = 'post'
+    POST_DOC_UNIQUE_ID_KEY = 'unique_id'
+    post_dict.get(POST_ENTITIES_KEY, {})[POST_DOC_UNIQUE_ID_KEY] = unique_id
+    USER_ENTITIES_KEY = 'user'
+    USER_DOC_RELATED_POST_UNIQUE_ID_KEY = 'post_unique_id'
+    post_dict.get(USER_ENTITIES_KEY, {})[USER_DOC_RELATED_POST_UNIQUE_ID_KEY] = unique_id
+    CORRECT_DOC_COUNT = 2
+    CORRECT_ID_LEN = 32
+    NOT_FOUND = 404
+    if len(post_dict) != CORRECT_DOC_COUNT or not unique_id or len(unique_id) != CORRECT_ID_LEN:
+        return {'status_code': NOT_FOUND}
+    mongo_executor = mongo.MongoExecutor(unique_id=unique_id)
+    stored_post_dict = mongo_executor.get_post_from_db()
+    if not stored_post_dict:
+        return {'status_code': NOT_FOUND}
+    if stored_post_dict == post_dict:
+        CONFLICT = 409
+        return {'status_code': CONFLICT}
+    mongo_executor.update_post(post_dict)
+    OK = 200
+    return {'status_code': OK}

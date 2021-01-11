@@ -1,11 +1,11 @@
-from mongo import MongoExecutor
 import json
-import os
+import mongo
 import requests
 import unittest
+import utils
 
 
-class PostDataCollection:
+class TestDataCollection:
     """Contains posts data that will be used in unittests"""
     post_dict_1 = {
         'post':
@@ -64,176 +64,284 @@ class PostDataCollection:
              'post_karma': 200743, 'comment_karma': 3974,
              'post_unique_id': '582ef18c485c11ebb1f1c9ee1740fa9b'}
     }
-
-
-class EnvironmentModifier:
-    def prepare_test_environment(self):
-        """Creates a file indicating that unittests are have been running at the moment.
-
-        Inserts certain test post data to the test collections.
-        """
-        with open(MongoExecutor.test_mode_identifier_filename, 'w') as file:
-            file.write('')
-        MongoExecutor().insert_all_posts_into_db(PostDataCollection.posts_list)
-
-    def restore_pre_test_state(self):
-        """Restores pre-test state of the directory and database. Removes 2 test collections
-
-        from a database, deletes a file indicating that unittests are have been running at the moment.
-        """
-        MongoExecutor().remove_collections()
-        os.remove(MongoExecutor.test_mode_identifier_filename)
+    WAIT_RESPONSE_SECONDS = 5
+    OK = 200
+    CREATED = 201
+    CONFLICT = 409
+    NOT_FOUND = 404
+    URL_WITHOUT_ID = "http://localhost:8087/posts/"
+    URL_WITH_EXISTENT_ID = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
+    URL_WITH_NONEXISTENT_ID = "http://localhost:8087/posts/002ef18c485c11ebb1f1c9ee1740fa9b/"
+    INVALID_URL = "http://localhost:8087/posts/invalid/"
 
 
 class ReorganizerMixin:
     def setUp(self):
         """Defines setUp behavior for unittests. Calls the function that prepares test environment"""
-        EnvironmentModifier().prepare_test_environment()
+        utils.prepare_test_environment()
 
     def tearDown(self):
         """Defines tearDown behavior for unittests.
 
         Calls the function that restores pre-test state of the directory and database.
         """
-        EnvironmentModifier().restore_pre_test_state()
+        utils.restore_pre_test_state()
 
 
 class TestGET(ReorganizerMixin, unittest.TestCase):
     def test_get_posts_success(self):
         print('testing get_posts success')
-        req = requests.get("http://localhost:8087/posts/", timeout=5)
-        self.assertEqual((req.status_code, req.json()), (200, PostDataCollection.posts_list))
+        req = requests.get(TestDataCollection.URL_WITHOUT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.json()), (TestDataCollection.OK, TestDataCollection.posts_list))
 
     def test_get_posts_no_collection(self):
         print('testing get_posts with no collection found')
-        MongoExecutor().remove_collections()
-        req = requests.get("http://localhost:8087/posts/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        mongo.MongoExecutor().remove_collections()
+        req = requests.get(TestDataCollection.URL_WITHOUT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_get_post_success(self):
         print('testing get_post success')
-        req = requests.get("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.json()), (200, PostDataCollection.post_dict_1))
+        req = requests.get(TestDataCollection.URL_WITH_EXISTENT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.json()), (TestDataCollection.OK, TestDataCollection.post_dict_1))
 
     def test_get_post_no_collection(self):
         print('testing get_post with no collection found')
-        MongoExecutor().remove_collections()
-        req = requests.get("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        mongo.MongoExecutor().remove_collections()
+        req = requests.get(TestDataCollection.URL_WITH_NONEXISTENT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_get_post_not_found(self):
         print('testing get_post not found')
-        req = requests.get("http://localhost:8087/posts/002ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.get(TestDataCollection.URL_WITH_NONEXISTENT_ID, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_get_url_not_valid(self):
         print('testing get_url is not valid')
-        req = requests.get("http://localhost:8087/posts/0582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.get(TestDataCollection.INVALID_URL, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
 
 class TestPOST(ReorganizerMixin, unittest.TestCase):
     def test_add_post_success(self):
         print('testing add_post success')
-        post_data = PostDataCollection.nonexistent_post_dict
+        post_data = TestDataCollection.nonexistent_post_dict
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/posts/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.json()), (201, {'UNIQUE_ID': 4}))
+        req = requests.post(TestDataCollection.URL_WITHOUT_ID, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        STORED_DOCUMENTS_NUMBER = 4
+        self.assertEqual((req.status_code, req.json()),
+                         (TestDataCollection.CREATED, {'UNIQUE_ID': STORED_DOCUMENTS_NUMBER}))
 
     def test_add_post_duplicate(self):
         print('testing add_post with duplicate')
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/posts/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.content), (409, b''))
+        req = requests.post(TestDataCollection.URL_WITHOUT_ID, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.CONFLICT, b''))
 
     def test_add_post_incorrect_post_dict(self):
         print('testing add_post with incorrect post dict')
-        post_data = PostDataCollection.incorrect_post_dict
+        post_data = TestDataCollection.incorrect_post_dict
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/posts/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.post(TestDataCollection.URL_WITHOUT_ID, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
     def test_post_url_not_valid(self):
         print('testing post_url is not valid')
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        req = requests.post("http://localhost:8087/postsinvalid/", data=post_data_json, timeout=5)
-        self.assertEqual((req.status_code, req.content), (404, b''))
+        req = requests.post(TestDataCollection.INVALID_URL, data=post_data_json,
+                            timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual((req.status_code, req.content), (TestDataCollection.NOT_FOUND, b''))
 
 
 class TestDELETE(ReorganizerMixin, unittest.TestCase):
     def test_del_post_success(self):
         print('testing del_post success')
-        req = requests.delete("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual(req.status_code, 200)
+        req = requests.delete(TestDataCollection.URL_WITH_EXISTENT_ID,
+                              timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.OK)
 
     def test_del_post_no_collection(self):
         print('testing del_post with no collection found')
-        MongoExecutor().remove_collections()
-        req = requests.delete("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual(req.status_code, 404)
+        mongo.MongoExecutor().remove_collections()
+        req = requests.delete(TestDataCollection.URL_WITH_NONEXISTENT_ID,
+                              timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_del_post_not_found(self):
         print('testing del_post not found')
-        req = requests.delete("http://localhost:8087/posts/002ef18c485c11ebb1f1c9ee1740fa9b/", timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.delete(TestDataCollection.URL_WITH_NONEXISTENT_ID,
+                              timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_delete_url_not_valid(self):
         print('testing delete_url is not valid')
-        req = requests.delete("http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/del", timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.delete(TestDataCollection.INVALID_URL, timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
 
 class TestPUT(ReorganizerMixin, unittest.TestCase):
     def test_update_post_success(self):
         print('testing update_post success')
-        post_data = PostDataCollection.update_post_dict
+        post_data = TestDataCollection.update_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 200)
+        req = requests.put(TestDataCollection.URL_WITH_EXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.OK)
 
     def test_update_post_no_collection(self):
         print('testing update_post with no collection found')
-        MongoExecutor().remove_collections()
-        post_data = PostDataCollection.update_post_dict
+        mongo.MongoExecutor().remove_collections()
+        post_data = TestDataCollection.update_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.URL_WITH_NONEXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_update_post_duplicate(self):
         print('testing update_post with duplicate')
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 409)
+        req = requests.put(TestDataCollection.URL_WITH_EXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.CONFLICT)
 
     def test_update_post_incorrect_put_data(self):
         print('testing update_post with incorrect data')
-        post_data = PostDataCollection.incorrect_post_dict
+        post_data = TestDataCollection.incorrect_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.URL_WITH_EXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_update_post_not_found(self):
         print('testing update_post not found')
-        post_data = PostDataCollection.nonexistent_post_dict
+        post_data = TestDataCollection.nonexistent_post_dict
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/48dde13e404611eb9360036bb7a2b36b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.URL_WITH_NONEXISTENT_ID, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
 
     def test_put_url_not_valid(self):
         print('testing put_url is not valid')
-        post_data = PostDataCollection.post_dict_1
+        post_data = TestDataCollection.post_dict_1
         post_data_json = json.dumps(post_data)
-        url = "http://localhost:8087/posts/bug582ef18c485c11ebb1f1c9ee1740fa9b/"
-        req = requests.put(url, data=post_data_json, timeout=5)
-        self.assertEqual(req.status_code, 404)
+        req = requests.put(TestDataCollection.INVALID_URL, data=post_data_json,
+                           timeout=TestDataCollection.WAIT_RESPONSE_SECONDS)
+        self.assertEqual(req.status_code, TestDataCollection.NOT_FOUND)
+
+
+class TestListGeneratedByThreads(unittest.TestCase):
+    def test_ordered_list(self):
+        print('testing posts_list_is_ready_check using ordered list')
+        ordered_posts_list = [
+            {'post': {'post_index': 0, 'another_key': ''}},
+            {'post': {'post_index': 1}},
+            {'post': {'post_index': 2}},
+            {'post': {'post_index': 3, 'another_key': ''}},
+            {'post': {'post_index': 4}},
+            {'post': {'post_index': 5, 'another_key': ''}},
+        ]
+        UNREACHABLE_NUMBER = 10
+        stop_count = UNREACHABLE_NUMBER
+
+        sliced_posts_list = ordered_posts_list[:0]
+        needed_posts_count = 0
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        needed_posts_count = 1
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:1]
+        needed_posts_count = 1
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:2]
+        needed_posts_count = 1
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:3]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:4]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:5]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = ordered_posts_list[:]
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+    def test_unordered_list(self):
+        print('testing posts_list_is_ready_check using unordered list')
+        unordered_posts_list = [
+            {'post': {'post_index': 0, 'another_key': ''}},
+            {'post': {'post_index': 1, 'another_key': ''}},
+            {'post': {'post_index': 3, 'another_key': ''}},
+            {'post': {'post_index': 4, 'another_key': ''}},
+        ]
+        UNREACHABLE_NUMBER = 10
+        stop_count = UNREACHABLE_NUMBER
+
+        sliced_posts_list = unordered_posts_list[:1]
+        needed_posts_count = 1
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        sliced_posts_list = unordered_posts_list[:2]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        sliced_posts_list = unordered_posts_list[:3]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
+
+        sliced_posts_list = unordered_posts_list[:4]
+        needed_posts_count = 2
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, True)
+
+        needed_posts_count = 3
+        list_is_ready = utils.posts_list_is_ready_check(sliced_posts_list, needed_posts_count, stop_count)
+        self.assertEqual(list_is_ready, False)
 
 
 if __name__ == "__main__":

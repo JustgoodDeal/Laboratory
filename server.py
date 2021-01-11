@@ -1,6 +1,6 @@
-from api import add_post, update_post, del_post, get_post, get_posts
+import api
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from utils import parse_url
+import utils
 
 
 class Server(BaseHTTPRequestHandler):
@@ -9,7 +9,8 @@ class Server(BaseHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header("Content-type", content_type)
         self.end_headers()
-        self.wfile.write(bytes(content, "utf-8"))
+        ENCODING = 'utf-8'
+        self.wfile.write(bytes(content, ENCODING))
 
     def do_GET(self):
         """Calls corresponding function for handling a GET request depending on the result of URL parsing
@@ -21,24 +22,29 @@ class Server(BaseHTTPRequestHandler):
         If URL is incorrect, status code 404 will be used in response.
         Sends response comprising defined data to the request.
         """
-        url = self.path[1:]
+        NO_1ST_SLASH_START_INDEX = 1
+        url = self.path[NO_1ST_SLASH_START_INDEX:]
         if url:
             response = {}
-            id = parse_url(url)
-            if id == 404:
-                status_code = 404
-            elif id:
-                response = get_post(id)
-                status_code = response['status_code']
+            unique_id = utils.parse_url(url)
+            NOT_FOUND = 404
+            STATUS_CODE_KEY = 'status_code'
+            if unique_id == NOT_FOUND:
+                status_code = NOT_FOUND
+            elif unique_id:
+                response = api.get_post(unique_id)
+                status_code = response[STATUS_CODE_KEY]
             else:
-                response = get_posts()
-                status_code = response['status_code']
+                response = api.get_posts()
+                status_code = response[STATUS_CODE_KEY]
             content_type = "application/json"
-            content = response.get('content', '')
+            CONTENT_KEY = 'content'
+            content = response.get(CONTENT_KEY, '')
         else:
             content_type = "text/html"
             content = "<h1>Server</h1>"
-            status_code = 200
+            OK = 200
+            status_code = OK
         self.respond_to_request(status_code, content_type, content)
 
     def do_POST(self):
@@ -50,15 +56,19 @@ class Server(BaseHTTPRequestHandler):
         """
         url = self.path
         content_type = "application/json"
-        if url == "/posts/":
+        SUITABLE_URL = "/posts/"
+        if url == SUITABLE_URL:
             content_length = int(self.headers['Content-Length'])
             post_body = self.rfile.read(content_length)
-            response = add_post(post_body)
-            content = response.get('content', '')
-            status_code = response['status_code']
+            response = api.add_post(post_body)
+            CONTENT_KEY = 'content'
+            content = response.get(CONTENT_KEY, '')
+            STATUS_CODE_KEY = 'status_code'
+            status_code = response[STATUS_CODE_KEY]
         else:
             content = ''
-            status_code = 404
+            NOT_FOUND = 404
+            status_code = NOT_FOUND
         self.respond_to_request(status_code, content_type, content)
 
     def do_DELETE(self):
@@ -68,16 +78,19 @@ class Server(BaseHTTPRequestHandler):
         If URL is incorrect, status code 404 will be used in response.
         Sends response comprising defined data to the request.
         """
-        url = self.path[1:]
-        content_type = "application/json"
+        NO_1ST_SLASH_START_INDEX = 1
+        url = self.path[NO_1ST_SLASH_START_INDEX:]
+        CONTENT_TYPE = "application/json"
         content = ''
-        status_code = 404
+        NOT_FOUND = 404
+        status_code = NOT_FOUND
         if url:
-            id = parse_url(url)
-            if id and id != 404:
-                response = del_post(id)
-                status_code = response['status_code']
-        self.respond_to_request(status_code, content_type, content)
+            unique_id = utils.parse_url(url)
+            if unique_id and unique_id != NOT_FOUND:
+                response = api.del_post(unique_id)
+                STATUS_CODE_KEY = 'status_code'
+                status_code = response[STATUS_CODE_KEY]
+        self.respond_to_request(status_code, CONTENT_TYPE, content)
 
     def do_PUT(self):
         """Determines the necessary data for respond to a PUT request. Parses URL and if it's equal to
@@ -86,29 +99,34 @@ class Server(BaseHTTPRequestHandler):
         If URL is incorrect, status code 404 will be used in response.
         Sends response comprising defined data to the request.
         """
-        url = self.path[1:]
-        content_type = "application/json"
+        NO_1ST_SLASH_START_INDEX = 1
+        url = self.path[NO_1ST_SLASH_START_INDEX:]
+        CONTENT_TYPE = "application/json"
         content = ''
-        status_code = 404
+        NOT_FOUND = 404
+        status_code = NOT_FOUND
         if url:
-            id = parse_url(url)
-            if id and id != 404:
+            unique_id = utils.parse_url(url)
+            if unique_id and unique_id != NOT_FOUND:
                 content_length = int(self.headers['Content-Length'])
                 put_body = self.rfile.read(content_length)
-                response = update_post(id, put_body)
-                status_code = response['status_code']
-        self.respond_to_request(status_code, content_type, content)
+                response = api.update_post(unique_id, put_body)
+                STATUS_CODE_KEY = 'status_code'
+                status_code = response[STATUS_CODE_KEY]
+        self.respond_to_request(status_code, CONTENT_TYPE, content)
 
 
-def run_server(host_name, host_port):
+def run_server(host_name, port_number):
     """Runs the server at a time until shutdown. Pressing buttons on the keyboard will not stop the server"""
-    server = HTTPServer((host_name, host_port), Server)
-    print(f"Server Starts - {host_name}:{host_port}")
+    server = HTTPServer((host_name, port_number), Server)
+    print(f"Server Starts - {host_name}:{port_number}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        ...
+        pass
 
 
 if __name__ == "__main__":
-    run_server("localhost", 8087)
+    HOST = 'localhost'
+    PORT = 8087
+    run_server(HOST, PORT)
