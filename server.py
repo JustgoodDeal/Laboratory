@@ -49,7 +49,7 @@ class Server(BaseHTTPRequestHandler):
                 status_code = response[status_code_key]
             content_type = "application/json"
             content_key = 'content'
-            content = response.get(content_key, '')
+            content = response.get(content_key, [])
             if get_params:
                 content = filter_content(content, get_params)
             content = json.dumps(content)
