@@ -16,16 +16,16 @@ class PageLoader:
 
         to ensure a sufficient number of suitable posts in the final sample.
         """
-        MULTIPLIER = 1.5
-        self.page_posts_count = math.ceil(posts_count * MULTIPLIER)
-        self.POST_DIVS_SELECTOR = 'div.rpBJOHq2PR60pnwJlUyP0 > div'
-        self.SCROLL_DOWN_SCRIPT = 'window.scrollTo(0, document.body.scrollHeight);'
+        multiplier = 1.5
+        self.page_posts_count = math.ceil(posts_count * multiplier)
+        self.post_divs_selector = 'div.rpBJOHq2PR60pnwJlUyP0 > div'
+        self.scroll_down_page = 'window.scrollTo(0, document.body.scrollHeight);'
 
     def __call__(self, driver):
         """Scrolls down the page unless loaded posts count is sufficient"""
 
-        driver.execute_script(self.SCROLL_DOWN_SCRIPT)
-        post_divs_loaded = driver.find_elements_by_css_selector(self.POST_DIVS_SELECTOR)
+        driver.execute_script(self.scroll_down_page)
+        post_divs_loaded = driver.find_elements_by_css_selector(self.post_divs_selector)
         if len(post_divs_loaded) > self.page_posts_count:
             return True
         return False
@@ -36,11 +36,11 @@ class PostsGetter:
         """Initializes Chrome webdriver, sets posts load waiting limit"""
         self.driver = webdriver.Chrome(executable_path=define_path_to_webdriver())
         self.posts_query = ['div', {'class': '_1oQyIsiPHYt6nx7VOmd1sz'}]
-        self.TAG_INDEX = 0
-        self.CLASS_INDEX = 1
+        self.tag_index = 0
+        self.class_index = 1
         self.url = url
         self.posts_count = posts_count
-        self.WAIT_SECONDS = 30
+        self.wait_seconds = 30
 
     def __enter__(self):
         """Opens suggested site in browser"""
@@ -59,14 +59,14 @@ class PostsGetter:
         """
         all_posts = []
         try:
-            WebDriverWait(self.driver, self.WAIT_SECONDS).until(PageLoader(self.posts_count))
+            WebDriverWait(self.driver, self.wait_seconds).until(PageLoader(self.posts_count))
             page_text = self.driver.page_source
-            PARSER_NAME = 'html.parser'
-            page_text_soup = BeautifulSoup(page_text, features=PARSER_NAME)
-            all_posts = page_text_soup.findAll(self.posts_query[self.TAG_INDEX], self.posts_query[self.CLASS_INDEX])
+            parser_name = 'html.parser'
+            page_text_soup = BeautifulSoup(page_text, features=parser_name)
+            all_posts = page_text_soup.findAll(self.posts_query[self.tag_index], self.posts_query[self.class_index])
         finally:
-            MULTIPLIER = 3
-            return all_posts[:self.posts_count * MULTIPLIER]
+            multiplier = 3
+            return all_posts[:self.posts_count * multiplier]
 
 
 class ParserError(Exception):
@@ -91,8 +91,8 @@ class PostDataParser:
         self.post_and_comment_karma_query = ['span', {"class": "karma"}]
         self.votes_count_query = ['div', {"class": "_1rZYMD_4xY3gRcSS3p8ODO"}]
         self.username_query = ['a', {"class": "_2tbHP6ZydRpjI44J3syuqC"}]
-        self.TAG_INDEX = 0
-        self.CLASS_INDEX = 1
+        self.tag_index = 0
+        self.class_index = 1
         self.post_index = post_index
         self.post = str(post)
         self.posts_list = posts_list
@@ -116,21 +116,21 @@ class PostDataParser:
                 self.post_dict[attr_name] = getattr(self, attr_name)
         except ParserError as err:
             logging.error(f'{err.text}, post URL: {err.post_url}')
-            POST_ORDER_INDEX_KEY = 'post_index'
-            self.post_dict = {POST_ORDER_INDEX_KEY: err.post_index}
+            post_order_index_key = 'post_index'
+            self.post_dict = {post_order_index_key: err.post_index}
         self.posts_list.append(self.post_dict)
 
     def define_url_date(self):
         """Defines post URL and post date, suppresses IndexError that could be thrown if tag isn't found"""
         try:
-            NEEDED_RESULT_INDEX = 0
-            date_and_url_tag = self.post_soup.findAll(self.date_and_url_query[self.TAG_INDEX],
-                                                      self.date_and_url_query[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
+            needed_result_index = 0
+            date_and_url_tag = self.post_soup.findAll(self.date_and_url_query[self.tag_index],
+                                                      self.date_and_url_query[self.class_index])[needed_result_index]
         except IndexError:
-            ERROR_TEXT = 'Parser index error'
-            raise ParserError(ERROR_TEXT, self.post_index)
-        ATTRIBUTE_NAME = 'href'
-        self.post_url = date_and_url_tag.attrs[ATTRIBUTE_NAME]
+            error_text = 'Parser index error'
+            raise ParserError(error_text, self.post_index)
+        attribute_name = 'href'
+        self.post_url = date_and_url_tag.attrs[attribute_name]
         self.post_date = convert_time_lapse_to_date(date_and_url_tag.text)
 
     def define_username_karmas_cakeday(self):
@@ -141,69 +141,69 @@ class PostDataParser:
         If user's private page is inaccessible to minors, relevant exception is thrown.
         """
         try:
-            NEEDED_RESULT_INDEX = 0
-            user_tag = self.post_soup.findAll(self.username_query[self.TAG_INDEX],
-                                              self.username_query[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
+            needed_result_index = 0
+            user_tag = self.post_soup.findAll(self.username_query[self.tag_index],
+                                              self.username_query[self.class_index])[needed_result_index]
         except IndexError:
-            ERROR_TEXT = "User doesn't exist"
-            raise ParserError(ERROR_TEXT, self.post_index, self.post_url)
-        USERNAME_START_INDEX = 2
-        self.username = user_tag.text[USERNAME_START_INDEX:]
-        ATTRIBUTE_NAME = 'href'
-        OLD_URL_PREFIX = "https://old.reddit.com"
-        NEW_URL_PREFIX = "https://www.reddit.com"
-        user_profile_link_old = f'{OLD_URL_PREFIX}{user_tag.attrs[ATTRIBUTE_NAME]}'
-        user_profile_link_new = f'{NEW_URL_PREFIX}{user_tag.attrs[ATTRIBUTE_NAME]}'
+            error_text = "User doesn't exist"
+            raise ParserError(error_text, self.post_index, self.post_url)
+        username_start_index = 2
+        self.username = user_tag.text[username_start_index:]
+        attribute_name = 'href'
+        old_url_prefix = "https://old.reddit.com"
+        new_url_prefix = "https://www.reddit.com"
+        user_profile_link_old = f'{old_url_prefix}{user_tag.attrs[attribute_name]}'
+        user_profile_link_new = f'{new_url_prefix}{user_tag.attrs[attribute_name]}'
         user_page_text_old = get_html(user_profile_link_old)
         user_page_text_new = get_html(user_profile_link_new)
-        PARSER_NAME = 'html.parser'
-        page_text_soup = BeautifulSoup(user_page_text_old, features=PARSER_NAME)
-        karma_tags = page_text_soup.findAll(self.post_and_comment_karma_query[self.TAG_INDEX],
-                                            self.post_and_comment_karma_query[self.CLASS_INDEX])
+        parser_name = 'html.parser'
+        page_text_soup = BeautifulSoup(user_page_text_old, features=parser_name)
+        karma_tags = page_text_soup.findAll(self.post_and_comment_karma_query[self.tag_index],
+                                            self.post_and_comment_karma_query[self.class_index])
         if not karma_tags:
-            ERROR_TEXT = 'Page inaccessible to minors'
-            raise ParserError(ERROR_TEXT, self.post_index, self.post_url)
-        page_text_soup = BeautifulSoup(user_page_text_new, features=PARSER_NAME)
-        karma_and_cake_tags = page_text_soup.findAll(self.karma_and_cake_day_query[self.TAG_INDEX],
-                                                     self.karma_and_cake_day_query[self.CLASS_INDEX])
-        POST_KARMA_INDEX = 0
-        COMMENT_KARMA_INDEX = 1
-        USER_KARMA_INDEX = 0
-        USER_CAKE_DAY_INDEX = 1
-        self.post_karma = karma_tags[POST_KARMA_INDEX].text
-        self.comment_karma = karma_tags[COMMENT_KARMA_INDEX].text
-        self.user_karma = karma_and_cake_tags[USER_KARMA_INDEX].text
-        self.user_cake_day = karma_and_cake_tags[USER_CAKE_DAY_INDEX].text
+            error_text = 'Page inaccessible to minors'
+            raise ParserError(error_text, self.post_index, self.post_url)
+        page_text_soup = BeautifulSoup(user_page_text_new, features=parser_name)
+        karma_and_cake_tags = page_text_soup.findAll(self.karma_and_cake_day_query[self.tag_index],
+                                                     self.karma_and_cake_day_query[self.class_index])
+        post_karma_index = 0
+        comment_karma_index = 1
+        user_karma_index = 0
+        user_cake_day_index = 1
+        self.post_karma = karma_tags[post_karma_index].text
+        self.comment_karma = karma_tags[comment_karma_index].text
+        self.user_karma = karma_and_cake_tags[user_karma_index].text
+        self.user_cake_day = karma_and_cake_tags[user_cake_day_index].text
 
     def define_comments_count(self):
         """Defines number of comments. If initial query doesn't deliver a result, the second will be used for search."""
-        comments_tags = self.post_soup.findAll(self.comments_count_query1[self.TAG_INDEX],
-                                               self.comments_count_query1[self.CLASS_INDEX])
-        NEEDED_RESULT_INDEX = 0
+        comments_tags = self.post_soup.findAll(self.comments_count_query1[self.tag_index],
+                                               self.comments_count_query1[self.class_index])
+        needed_result_index = 0
         if comments_tags:
-            comments_tag = comments_tags[NEEDED_RESULT_INDEX]
+            comments_tag = comments_tags[needed_result_index]
             self.comments_count = comments_tag.text
         else:
-            comments_tag = self.post_soup.findAll(self.comments_count_query2[self.TAG_INDEX],
-                                                  self.comments_count_query2[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
+            comments_tag = self.post_soup.findAll(self.comments_count_query2[self.tag_index],
+                                                  self.comments_count_query2[self.class_index])[needed_result_index]
             raw_text = comments_tag.text
             space_index = raw_text.find(' ')
             self.comments_count = raw_text[:space_index]
 
     def define_votes_count(self):
         """Defines number of votes"""
-        NEEDED_RESULT_INDEX = 1
-        votes_count_tag = self.post_soup.findAll(self.votes_count_query[self.TAG_INDEX],
-                                                 self.votes_count_query[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
+        needed_result_index = 1
+        votes_count_tag = self.post_soup.findAll(self.votes_count_query[self.tag_index],
+                                                 self.votes_count_query[self.class_index])[needed_result_index]
         self.votes_count = votes_count_tag.text
 
     def define_category(self):
         """Defines post category"""
-        NEEDED_RESULT_INDEX = 1
-        category_tag = self.post_soup.findAll(self.category_query[self.TAG_INDEX],
-                                              self.category_query[self.CLASS_INDEX])[NEEDED_RESULT_INDEX]
-        POST_CATEGORY_START_INDEX = 2
-        self.post_category = category_tag.text[POST_CATEGORY_START_INDEX:]
+        needed_result_index = 1
+        category_tag = self.post_soup.findAll(self.category_query[self.tag_index],
+                                              self.category_query[self.class_index])[needed_result_index]
+        post_category_start_index = 2
+        self.post_category = category_tag.text[post_category_start_index:]
 
 
 class PostsProcessor:
@@ -243,19 +243,19 @@ class PostsProcessor:
         logging.info('Start sending requests')
         for ind, post in enumerate(self.all_posts):
             threading.Thread(target=PostDataParser(ind, post, posts_data).add_post_data_to_list, daemon=True).start()
-        MULTIPLIER = 0.2
-        wait_before_start_check_seconds = self.posts_count * MULTIPLIER
+        multiplier = 0.2
+        wait_before_start_check_seconds = self.posts_count * multiplier
         time.sleep(wait_before_start_check_seconds)
-        WAIT_NEXT_CHECK_SECONDS = 0.5
+        wait_next_check_seconds = 0.5
         while True:
             if posts_list_is_ready_check(posts_data, self.posts_count, len(self.all_posts)):
                 break
-            time.sleep(WAIT_NEXT_CHECK_SECONDS)
+            time.sleep(wait_next_check_seconds)
         logging.info('Stop sending requests')
-        POST_ORDER_INDEX_KEY = 'post_index'
-        parsed_posts_data = sorted(posts_data[::], key=lambda post_dict: post_dict[POST_ORDER_INDEX_KEY])
+        post_order_index_key = 'post_index'
+        parsed_posts_data = sorted(posts_data[::], key=lambda post_dict: post_dict[post_order_index_key])
         for post_dict in parsed_posts_data:
-            del post_dict[POST_ORDER_INDEX_KEY]
+            del post_dict[post_order_index_key]
         parsed_posts_data = [post_dict for post_dict in parsed_posts_data if post_dict][:self.posts_count]
         return parsed_posts_data
 
